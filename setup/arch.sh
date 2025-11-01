@@ -153,9 +153,9 @@ if [[ "$MODE" != "3" ]]; then
 fi
 
 # --- Optional SDDM theme setup ---
-if [ -d "$DOTFILES_DIR/setup/sddm-theme" ]; then
+if [ -d "$DOTFILES_DIR/setup/minimal-sddm" ]; then
   echo
-  read -rp "Install SDDM theme from setup/sddm-theme? [y/N]: " INSTALL_SDDM
+  read -rp "Install SDDM theme from setup/minimal-sddm ? [y/N]: " INSTALL_SDDM
   if [[ "$INSTALL_SDDM" =~ ^[Yy]$ ]]; then
     echo "==> Setting up SDDM theme and config..."
 
