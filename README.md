@@ -12,6 +12,11 @@ all you need):
 bash <(curl -fsSL https://raw.githubusercontent.com/meszmate/dotfiles/main/setup/arch.sh)
 ```
 
+The setup is interactive: it first asks a handful of preference questions
+(symlink or copy, dev toolchain, bluetooth, browser, zsh, services, login
+theme — Enter always picks the recommended default), then runs everything on
+its own with numbered `[step/8]` progress and live pacman/yay output.
+
 The script clones this repo to `~/dotfiles` if it isn't there already, then:
 
 1. Installs `base-devel`/`git` and builds the `yay` AUR helper
