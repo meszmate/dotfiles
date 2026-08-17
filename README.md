@@ -51,6 +51,8 @@ Reboot when it finishes and log in to Hyprland from sddm.
 | `SUPER + CTRL + H/J/K/L` | Resize window |
 | `SUPER + 1..0` | Switch workspace (`+ SHIFT` to move window) |
 | `SUPER + S` / `Print` | Region screenshot → swappy / full screen → clipboard |
+| `SUPER + SHIFT + R` | Screen recording toggle (wf-recorder → ~/Videos) |
+| `SUPER + SHIFT + C` | Color picker (hyprpicker → clipboard) |
 | `SUPER + C` | Clipboard history (cliphist) |
 | `SUPER + .` | Lock screen (hyprlock) |
 | `SUPER + V` / `F` / `P` / `N` | Float / fullscreen / pseudotile / toggle split |
@@ -76,6 +78,20 @@ setup/
   arch.sh       the installer
   minimal-sddm/ sddm login theme (Qt6)
 ```
+
+## Automatic sync
+
+If enabled during install, a systemd user timer (`dotfiles-sync.timer`) runs
+3 minutes after boot and every 6 hours: it pulls this repo (fast-forward
+only), updates the nvim submodule, installs any packages newly added to
+`setup/arch.sh`, links any new configs, and updates the system — then sends a
+notification and reloads Hyprland. Symlinked configs need no sync at all;
+edits apply instantly.
+
+Run `dotfiles-sync` manually anytime; logs go to
+`~/.local/state/dotfiles-sync.log`. It uses a scoped sudoers rule
+(`/etc/sudoers.d/11-dotfiles-sync`, passwordless `pacman` only) so the timer
+can install packages unattended — delete that file to revoke it.
 
 ## After installing
 
