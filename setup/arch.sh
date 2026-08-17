@@ -108,7 +108,7 @@ PACMAN_PKGS=(
   # Hyprland desktop
   hyprland hyprlock hypridle xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
   qt5-wayland qt6-wayland polkit-gnome
-  waybar wofi mako libnotify swww grim slurp swappy wl-clipboard cliphist
+  waybar wofi mako libnotify hyprpaper grim slurp swappy wl-clipboard cliphist
   # Terminal, shell & CLI tools
   kitty zsh starship tmux fzf zoxide eza bat fd ripgrep lazygit btop
   man-db unzip wget
