@@ -1,0 +1,23 @@
+# Catppuccin Mocha
+font=Inter 11
+width=380
+height=140
+margin=12
+padding=14
+border-size=2
+border-radius=10
+max-icon-size=48
+default-timeout=6000
+anchor=top-right
+
+background-color=#1e1e2e
+text-color=#cdd6f4
+border-color=#cba6f7
+progress-color=over #313244
+
+[urgency=high]
+border-color=#f38ba8
+default-timeout=0
+
+[mode=do-not-disturb]
+invisible=1
