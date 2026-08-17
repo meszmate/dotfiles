@@ -1,0 +1,82 @@
+/* Terminal-style menus (power menu, clipboard, cheatsheet, screenshot, ...).
+ * Scripts pass a prompt like "meszmate@starfighter ~ $" and rows in monospace. */
+@import "theme.rasi"
+
+* {
+    font: "JetBrainsMono Nerd Font 12";
+    accent: @green;
+}
+
+window {
+    width:            560px;
+    border:           1px;
+    border-color:     @surface1;
+    border-radius:    8px;
+    background-color: #11111bf5;
+}
+
+mainbox {
+    padding:  14px 16px 16px 16px;
+    spacing:  10px;
+    children: [ inputbar, message, listview ];
+}
+
+inputbar {
+    background-color: transparent;
+    padding:          4px 6px 8px 6px;
+    border:           0px 0px 1px 0px;
+    border-color:     @surface1;
+    border-radius:    0;
+    spacing:          8px;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color: @accent;
+    font:       "JetBrainsMono Nerd Font Bold 12";
+}
+
+entry {
+    placeholder:       "_";
+    placeholder-color: @overlay0;
+    text-color:        @text;
+    cursor:            text;
+}
+
+message {
+    background-color: transparent;
+    padding:          0 6px;
+    border-radius:    0;
+}
+
+textbox {
+    text-color: @overlay0;
+    font:       "JetBrainsMono Nerd Font 11";
+}
+
+listview {
+    lines:   7;
+    spacing: 2px;
+}
+
+element {
+    padding:       6px 10px;
+    border-radius: 4px;
+    border:        0px 0px 0px 2px;
+    border-color:  transparent;
+}
+element normal.normal, element alternate.normal {
+    text-color: @subtext0;
+}
+element selected.normal {
+    background-color: @surface0;
+    border-color:     @accent;
+    text-color:       @accent;
+}
+element-text {
+    text-color: inherit;
+    highlight:  bold;
+}
+element-icon {
+    size: 20px;
+}

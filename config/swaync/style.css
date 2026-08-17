@@ -1,0 +1,262 @@
+/* swaync — Catppuccin Mocha. Loaded on top of the packaged stylesheet, so
+ * most theming happens through its CSS variables. */
+
+@define-color base     #1e1e2e;
+@define-color mantle   #181825;
+@define-color crust    #11111b;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color surface2 #585b70;
+@define-color overlay0 #6c7086;
+@define-color text     #cdd6f4;
+@define-color subtext0 #a6adc8;
+@define-color mauve    #cba6f7;
+@define-color blue     #89b4fa;
+@define-color red      #f38ba8;
+@define-color peach    #fab387;
+@define-color green    #a6e3a1;
+@define-color yellow   #f9e2af;
+
+:root {
+  --cc-bg: rgba(30, 30, 46, 0.86);
+  --noti-border-color: rgba(69, 71, 90, 0.7);
+  --noti-bg: 30, 30, 46;
+  --noti-bg-alpha: 0.9;
+  --noti-bg-darker: rgb(24, 24, 37);
+  --noti-bg-hover: rgb(49, 50, 68);
+  --noti-bg-focus: rgba(69, 71, 90, 0.6);
+  --noti-close-bg: rgb(69, 71, 90);
+  --noti-close-bg-hover: rgb(88, 91, 112);
+  --text-color: rgb(205, 214, 244);
+  --text-color-disabled: rgb(108, 112, 134);
+  --bg-selected: rgb(203, 166, 247);
+  --border-radius: 14px;
+  --border: 1px solid var(--noti-border-color);
+  --font-size-body: 13px;
+  --font-size-summary: 14px;
+  --notification-shadow: 0 8px 24px rgba(17, 17, 27, 0.55);
+}
+
+* {
+  font-family: "Inter", "JetBrainsMono Nerd Font", sans-serif;
+}
+
+/* ---- popups --------------------------------------------------------------- */
+.notification-row .notification-background .notification {
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(69, 71, 90, 0.7);
+  background: rgba(30, 30, 46, 0.92);
+}
+.notification-row .notification-background .notification.critical {
+  border: 1px solid alpha(@red, 0.9);
+}
+.notification-row .notification-background .notification.low {
+  border: 1px solid alpha(@surface1, 0.5);
+}
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .summary {
+  color: @text;
+  font-weight: 700;
+}
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .body {
+  color: @subtext0;
+}
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .time {
+  color: @overlay0;
+  font-size: 11px;
+}
+.notification-row .notification-background .notification .notification-default-action .notification-content progressbar {
+  border-radius: 6px;
+}
+.notification-row .notification-background .notification .notification-default-action .notification-content progressbar progress {
+  background: @mauve;
+  border-radius: 6px;
+}
+.notification-row .notification-background .notification .notification-action > button {
+  border-radius: 10px;
+  background: @surface0;
+  color: @text;
+  border: none;
+}
+.notification-row .notification-background .notification .notification-action > button:hover {
+  background: @surface1;
+  color: @mauve;
+}
+.close-button {
+  background: @surface1;
+  color: @text;
+}
+.close-button:hover {
+  background: @red;
+  color: @base;
+}
+
+/* ---- control center ------------------------------------------------------- */
+.control-center {
+  border-radius: 18px;
+  border: 1px solid rgba(69, 71, 90, 0.7);
+  background: rgba(30, 30, 46, 0.86);
+  box-shadow: 0 12px 32px rgba(17, 17, 27, 0.6);
+  padding: 4px;
+}
+.control-center .control-center-list-placeholder {
+  color: @overlay0;
+  font-size: 15px;
+}
+.notification-group .notification-group-headers .notification-group-header {
+  color: @subtext0;
+}
+.notification-group .notification-group-buttons > button {
+  border-radius: 10px;
+  background: @surface0;
+  color: @text;
+  border: none;
+}
+.notification-group .notification-group-buttons > button:hover {
+  background: @surface1;
+}
+
+.widget {
+  margin: 6px 8px;
+}
+.widget-title {
+  margin: 10px 12px 4px 12px;
+}
+.widget-title > label {
+  font-size: 18px;
+  font-weight: 700;
+  color: @text;
+}
+.widget-title > button {
+  border-radius: 10px;
+  background: @surface0;
+  color: @text;
+  border: none;
+  padding: 4px 12px;
+}
+.widget-title > button:hover {
+  background: @red;
+  color: @base;
+}
+
+.widget-dnd {
+  margin: 4px 12px 8px 12px;
+}
+.widget-dnd > label {
+  color: @subtext0;
+  font-size: 13px;
+}
+.widget-dnd > switch {
+  border-radius: 999px;
+  background: @surface1;
+  border: none;
+}
+.widget-dnd > switch:checked {
+  background: @mauve;
+}
+.widget-dnd > switch slider {
+  border-radius: 999px;
+  background: @text;
+  border: none;
+}
+
+.widget-buttons-grid {
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(49, 50, 68, 0.6);
+}
+.widget-buttons-grid flowboxchild > button {
+  margin: 4px;
+  padding: 6px 0;
+  min-width: 50px;
+  min-height: 34px;
+  border-radius: 12px;
+  background: @surface0;
+  color: @text;
+  border: none;
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 18px;
+}
+.widget-buttons-grid flowboxchild > button:hover {
+  background: @surface1;
+  color: @mauve;
+}
+.widget-buttons-grid flowboxchild > button.toggle:checked {
+  background: @mauve;
+  color: @base;
+}
+
+.widget-mpris {
+  padding: 0;
+}
+.widget-mpris .widget-mpris-player {
+  border-radius: 14px;
+  padding: 8px;
+  margin: 4px 0;
+  background: rgba(49, 50, 68, 0.6);
+}
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-title {
+  font-weight: 700;
+  color: @text;
+}
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-subtitle {
+  color: @subtext0;
+}
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button {
+  border-radius: 999px;
+  color: @text;
+}
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:hover {
+  background: @surface1;
+}
+.widget-mpris > box > button {
+  color: @subtext0;
+}
+
+.widget-volume,
+.widget-backlight {
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(49, 50, 68, 0.6);
+}
+.widget-volume label,
+.widget-backlight label {
+  font-family: "JetBrainsMono Nerd Font";
+  color: @mauve;
+  font-size: 15px;
+  min-width: 24px;
+}
+.widget-volume scale trough,
+.widget-backlight scale trough {
+  background: @surface1;
+  border-radius: 999px;
+  min-height: 8px;
+  border: none;
+}
+.widget-volume scale highlight,
+.widget-backlight scale highlight {
+  background: @mauve;
+  border-radius: 999px;
+  border: none;
+}
+.widget-volume scale slider,
+.widget-backlight scale slider {
+  background: @text;
+  border-radius: 999px;
+  min-width: 14px;
+  min-height: 14px;
+  margin: -4px;
+  border: none;
+  box-shadow: none;
+}
+.widget-volume > box > button {
+  border-radius: 10px;
+  background: @surface0;
+  color: @subtext0;
+  border: none;
+}
+.per-app-volume {
+  border-radius: 12px;
+  background: rgba(30, 30, 46, 0.6);
+  margin-top: 6px;
+  padding: 4px 8px;
+}

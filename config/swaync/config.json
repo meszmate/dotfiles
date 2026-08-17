@@ -1,0 +1,110 @@
+{
+  "$schema": "/etc/xdg/swaync/configSchema.json",
+  "positionX": "right",
+  "positionY": "top",
+  "layer": "overlay",
+  "control-center-layer": "top",
+  "layer-shell": true,
+  "cssPriority": "user",
+  "control-center-margin-top": 8,
+  "control-center-margin-bottom": 8,
+  "control-center-margin-right": 8,
+  "control-center-margin-left": 0,
+  "control-center-width": 440,
+  "control-center-height": 900,
+  "fit-to-screen": false,
+  "notification-window-width": 400,
+  "notification-icon-size": 56,
+  "notification-body-image-height": 120,
+  "notification-body-image-width": 220,
+  "notification-2fa-action": true,
+  "notification-inline-replies": true,
+  "notification-grouping": true,
+  "timeout": 8,
+  "timeout-low": 4,
+  "timeout-critical": 0,
+  "relative-timestamps": true,
+  "keyboard-shortcuts": true,
+  "image-visibility": "when-available",
+  "transition-time": 180,
+  "hide-on-clear": false,
+  "hide-on-action": true,
+  "script-fail-notify": true,
+  "text-empty": "All caught up",
+  "widgets": [
+    "title",
+    "dnd",
+    "buttons-grid",
+    "mpris",
+    "volume",
+    "backlight",
+    "notifications"
+  ],
+  "widget-config": {
+    "title": {
+      "text": "Notifications",
+      "clear-all-button": true,
+      "button-text": "Clear all"
+    },
+    "dnd": {
+      "text": "Do not disturb"
+    },
+    "mpris": {
+      "blacklist": [],
+      "autohide": true,
+      "show-album-art": "when-available",
+      "loop-carousel": false
+    },
+    "volume": {
+      "label": "󰕾",
+      "show-per-app": true,
+      "show-per-app-icon": true,
+      "show-per-app-label": false,
+      "expand-per-app": false,
+      "empty-list-label": "Nothing is playing",
+      "expand-button-label": "󰅀",
+      "collapse-button-label": "󰅃"
+    },
+    "backlight": {
+      "label": "󰃟",
+      "min": 5
+    },
+    "buttons-grid": {
+      "buttons-per-row": 6,
+      "actions": [
+        {
+          "label": "󰤨",
+          "type": "toggle",
+          "active": true,
+          "command": "sh -c '[[ $SWAYNC_TOGGLE_STATE == true ]] && nmcli radio wifi on || nmcli radio wifi off'",
+          "update-command": "sh -c '[[ $(nmcli radio wifi) == \"enabled\" ]] && echo true || echo false'"
+        },
+        {
+          "label": "󰂯",
+          "type": "toggle",
+          "active": true,
+          "command": "sh -c '[[ $SWAYNC_TOGGLE_STATE == true ]] && bluetoothctl power on || bluetoothctl power off'",
+          "update-command": "sh -c 'bluetoothctl show 2>/dev/null | grep -q \"Powered: yes\" && echo true || echo false'"
+        },
+        {
+          "label": "󰌾",
+          "command": "loginctl lock-session"
+        },
+        {
+          "label": "󱩌",
+          "type": "toggle",
+          "command": "sh -c '[[ $SWAYNC_TOGGLE_STATE == true ]] && ~/.config/hypr/scripts/nightlight on || ~/.config/hypr/scripts/nightlight off'",
+          "update-command": "sh -c '[[ -f ${XDG_RUNTIME_DIR:-/tmp}/nightlight-manual ]] && echo true || echo false'"
+        },
+        {
+          "label": "󰍹",
+          "command": "sh -c 'pgrep -x wf-recorder >/dev/null && ~/.config/hypr/scripts/record || ~/.config/hypr/scripts/screenshot menu'"
+        },
+        {
+          "label": "󰐥",
+          "command": "~/.config/rofi/scripts/powermenu"
+        }
+      ]
+    }
+  }
+}

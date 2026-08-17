@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Wallpaper picker (SUPER+SHIFT+W). Shows images from ~/Pictures/Wallpapers,
+# ~/.config/hypr/wallpapers and the default wallpaper, with previews.
+# The choice is applied live (hyprpaper IPC) and remembered through the
+# ~/.config/hypr/wallpaper.current symlink used by hyprpaper and hyprlock.
+set -uo pipefail
+THEME="$HOME/.config/rofi/menu.rasi"
+CURRENT="$HOME/.config/hypr/wallpaper.current"
+DIRS=("$HOME/Pictures/Wallpapers" "$HOME/.config/hypr/wallpapers" "$HOME/.config/hypr")
+
+mapfile -t files < <(for d in "${DIRS[@]}"; do
+    [[ -d "$d" ]] && find "$d" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) ! -name 'wallpaper.current'
+done | sort -u)
+[[ ${#files[@]} -eq 0 ]] && { notify-send -a Wallpaper "No wallpapers found" "Put images in ~/Pictures/Wallpapers"; exit 0; }
+
+sel=$(for f in "${files[@]}"; do printf '%s\0icon\x1f%s\n' "$(basename "$f")" "$f"; done \
+      | rofi -dmenu -i -p "$USER@$(uname -n) ~ \$ wallpaper" -theme "$THEME" -show-icons \
+          -theme-str 'window { width: 720px; } listview { columns: 3; lines: 3; flow: horizontal; spacing: 8px; } element { orientation: vertical; padding: 8px; } element-icon { size: 180px; } element-text { horizontal-align: 0.5; }') || exit 0
+
+for f in "${files[@]}"; do
+    if [[ "$(basename "$f")" == "$sel" ]]; then
+        ln -sfn "$f" "$CURRENT"
+        hyprctl hyprpaper wallpaper ", $CURRENT" >/dev/null 2>&1 || hyprctl hyprpaper wallpaper ", $f" >/dev/null 2>&1
+        notify-send -a Wallpaper -i "$f" "Wallpaper set" "$sel"
+        setsid -f "$HOME/.config/hypr/scripts/lock-fx" prepare >/dev/null 2>&1 </dev/null   # lock screen backgrounds
+        break
+    fi
+done

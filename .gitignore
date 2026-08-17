@@ -6,3 +6,5 @@
 # Runtime files GTK writes next to the tracked settings.ini
 config/gtk-3.0/bookmarks
 config/gtk-3.0/servers
+__pycache__/
+*.pyc

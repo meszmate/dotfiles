@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Clipboard history (SUPER+C) via cliphist.
+#   Enter  → copy entry      Delete → remove entry      Shift+Delete → wipe history
+set -uo pipefail
+THEME="$HOME/.config/rofi/menu.rasi"
+
+while true; do
+    sel=$(cliphist list | rofi -dmenu -i -p "$USER@$(uname -n) ~ \$ cliphist" -theme "$THEME" \
+            -theme-str 'window { width: 680px; } listview { lines: 10; } element-text { font: "JetBrainsMono Nerd Font 11"; }' \
+            -display-columns 2 -display-column-separator "$(printf '\t')" \
+            -kb-custom-1 Delete -kb-custom-2 Shift+Delete \
+            -mesg "Enter: copy · Del: remove · Shift+Del: clear all")
+    rc=$?
+    case $rc in
+        0)  [[ -n "$sel" ]] && printf '%s' "$sel" | cliphist decode | wl-copy
+            [[ -n "$sel" ]] && notify-send -a Clipboard -t 1500 -i edit-paste "Copied" "$(printf '%s' "$sel" | cut -f2- | head -c 80)"
+            exit 0 ;;
+        10) [[ -n "$sel" ]] && printf '%s' "$sel" | cliphist delete ;;      # loop again
+        11) cliphist wipe; notify-send -a Clipboard -t 1500 -i edit-clear "Clipboard history cleared"; exit 0 ;;
+        *)  exit 0 ;;
+    esac
+done

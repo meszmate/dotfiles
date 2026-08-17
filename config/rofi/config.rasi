@@ -1,0 +1,54 @@
+/* rofi 2.0 (Wayland) — launcher, window switcher, run, calc, emoji, ...
+ * SUPER+Space opens drun; Ctrl+Tab / Shift+Right switches modes.
+ * Theme: theme.rasi (Catppuccin Mocha). Menus (power, clipboard, ...) live in
+ * scripts/ and use menu.rasi. */
+
+configuration {
+    modes:                "drun,run,window,filebrowser,calc,emoji";
+    show-icons:           true;
+    icon-theme:           "Papirus-Dark";
+    font:                 "Inter 12";
+    terminal:             "kitty";
+    ssh-client:           "ssh";
+    run-shell-command:    "{terminal} -e {cmd}";
+
+    /* what the modes look like */
+    display-drun:         "󰀻 Apps";
+    display-run:          " Run";
+    display-window:       "󰖯 Windows";
+    display-filebrowser:  "󰉋 Files";
+    display-ssh:          "󰣀 SSH";
+    display-calc:         "󰃬 Calc";
+    display-emoji:        "󰞅 Emoji";
+    drun-display-format:  "{name} <span alpha='55%' size='small'>{generic}</span>";
+    window-format:        "{w}  {c}   {t}";
+    drun-match-fields:    "name,generic,exec,categories,keywords";
+    drun-show-actions:    false;
+    drun-url-launcher:    "xdg-open";
+
+    /* matching */
+    matching:             "fuzzy";
+    sort:                 true;
+    sorting-method:       "fzf";
+    case-sensitive:       false;
+    cycle:                true;
+    hover-select:         true;
+    me-select-entry:      "";
+    me-accept-entry:      "MousePrimary";
+    click-to-exit:        true;
+
+    /* keys: vim-style row movement (Ctrl+j/k) next to the arrows */
+    kb-remove-to-eol:     "Control+Shift+e";
+    kb-accept-entry:      "Control+m,Return,KP_Enter";
+    kb-row-up:            "Up,Control+p,Control+k";
+    kb-row-down:          "Down,Control+n,Control+j";
+    kb-mode-next:         "Shift+Right,Control+Tab";
+    kb-mode-previous:     "Shift+Left,Control+ISO_Left_Tab";
+    kb-mode-complete:     "";
+    kb-element-next:      "";
+    kb-element-prev:      "";
+    kb-row-tab:           "Tab";
+    kb-cancel:            "Escape,Control+g,Control+bracketleft";
+}
+
+@theme "~/.config/rofi/theme.rasi"

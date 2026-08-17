@@ -1,164 +1,340 @@
+// Waybar — three floating "islands": workspaces + window | clock | status.
+// Style: style.css (Catppuccin Mocha). Scripts: scripts/.
 {
     "layer": "top",
     "position": "top",
+    "height": 34,
+    "margin-top": 6,
+    "margin-left": 8,
+    "margin-right": 8,
+    "spacing": 0,
     "exclusive": true,
-    "passthrough": false,
-    "gtk-layer-shell": true,
-    "height": 50,
-    "modules-left": ["custom/launch_wofi","hyprland/workspaces","cpu","memory","disk","hyprland/window"],
-    "modules-center": ["custom/lock_screen","custom/updates","clock"],
-    "modules-right": ["temperature","battery","backlight","pulseaudio","pulseaudio#microphone","tray","custom/weather", "custom/uptime"],
+    "reload_style_on_change": true,
 
-    "custom/uptime": {
-        "format": "🕐 {}",
-        "exec": "uptime -p | sed 's/up //; s/ days/d/; s/ hours/h/; s/ minutes/m/'",
-        "interval": 60
-    },
-    
-    "hyprland/window": {
-        "format": "{}"
-    },
+    "modules-left": [
+        "custom/launcher",
+        "hyprland/workspaces",
+        "hyprland/submap",
+        "hyprland/window"
+    ],
+    "modules-center": [
+        "custom/weather",
+        "clock",
+        "mpris"
+    ],
+    "modules-right": [
+        "cpu",
+        "memory",
+        "temperature",
+        "tray",
+        "privacy",
+        "group/tools",
+        "pulseaudio",
+        "pulseaudio#microphone",
+        "backlight",
+        "bluetooth",
+        "network",
+        "battery",
+        "custom/updates",
+        "custom/notification",
+        "custom/power"
+    ],
 
-    "custom/launch_wofi": {
-        "format": "",
-        "on-click": "pkill wofi || wofi",
-        "tooltip": false
-    },
-
-    "custom/lock_screen": {
-        "format": "",
-        "on-click": "loginctl lock-session",
-        "tooltip": false
-    },
-
-    "cpu": {
-        "interval": 10,
-        "format": " {usage}%",
-        "max-length": 10,
-        "on-click": "kitty --start-as=fullscreen --title btop sh -c 'btop'"
-    },
-
-    "disk": {
-        "interval": 30,
-        "format": "󰋊 {percentage_used}%",
-        "path": "/",
-        "tooltip": true,
-        "tooltip-format": "HDD - {used} used out of {total} on {path} ({percentage_used}%)",
-        "on-click": "kitty --start-as=fullscreen --title btop sh -c 'btop'"
-    },
-
-    "memory": {
-        "interval": 30,
-        "format": " {}%",
-        "max-length": 10,
-        "tooltip": true,
-        "tooltip-format": "Memory - {used:0.1f}GB used",
-        "on-click": "kitty --start-as=fullscreen --title btop sh -c 'btop'"
-    },
-
-    "custom/updates": {
-        "format": "{}",
-        "exec": "~/.config/waybar/scripts/update-sys",
-        "on-click": "~/.config/waybar/scripts/update-sys update",
-        "interval": 300,
-        "tooltip": true
+    // ---- left ------------------------------------------------------------
+    "custom/launcher": {
+        "format": "󰣇",
+        "tooltip-format": "Apps  ·  SUPER+Space",
+        "on-click": "rofi -show drun",
+        "on-click-right": "rofi -show window"
     },
 
     "hyprland/workspaces": {
-        "disable-scroll": true,
-        "all-outputs": true,
+        "format": "{id}",
         "on-click": "activate",
-        "persistent-workspaces": {
-            "1": [],
-            "2": [],
-            "3": [],
-            "4": [],
-            "5": [],
-            "6": [],
-            "7": [],
-            "8": [],
-            "9": [],
-            "10": []
-        }
-    },
-    
-   "custom/weather": {
-        //shows the current weather and forecast
-        "tooltip" : true,
-        "format" : "{}",
-        "interval" : 30,
-        "exec" : "~/.config/waybar/scripts/waybar-wttr.py",
-        "return-type" : "json"
+        "all-outputs": false,
+        "sort-by": "number",
+        "persistent-workspaces": { "*": 5 },
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'",
+        "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'"
     },
 
-    "tray": {
-        "icon-size": 18,
-        "spacing": 10
+    "hyprland/submap": {
+        "format": "󰩨 {}",
+        "tooltip": false
+    },
+
+    "hyprland/window": {
+        "format": "{title}",
+        "icon": true,
+        "icon-size": 16,
+        "max-length": 48,
+        "separate-outputs": true,
+        "rewrite": {
+            "(.*) — Zen Browser": "$1",
+            "(.*) - Zen": "$1",
+            "(.*) — Mozilla Firefox": "$1",
+            "(.*) - Google Chrome": "$1",
+            "(.*) - Visual Studio Code": "$1",
+            "(.*) - NVIM": "$1",
+            "^$": ""
+        }
+    },
+
+    // ---- center ----------------------------------------------------------
+    "custom/weather": {
+        "exec": "~/.config/waybar/scripts/weather",
+        "return-type": "json",
+        "interval": 900,
+        "format": "{}",
+        "tooltip": true,
+        "on-click": "xdg-open https://wttr.in"
     },
 
     "clock": {
-        "format": "{:%I:%M %p}",
-        "tooltip": true,
-        "tooltip-format": "{: %A, %B %e %Y}"
-    },
-
-    "backlight": {
-        "device": "intel_backlight",
-        "format": "{icon} {percent}%",
-        "format-icons": ["󰃞", "󰃟", "󰃠"],
-        "on-scroll-up": "brightnessctl set 1%+",
-        "on-scroll-down": "brightnessctl set 1%-",
-        "min-length": 6
-    },
-
-    "battery": {
-        "states": {
-            "good": 95,
-            "warning": 30,
-            "critical": 20
+        "interval": 30,
+        "format": "{:%H:%M}",
+        "format-alt": "{:%a %d %b  ·  %H:%M}",
+        "tooltip-format": "<tt><small>{calendar}</small></tt>",
+        "calendar": {
+            "mode": "month",
+            "mode-mon-col": 3,
+            "weeks-pos": "right",
+            "on-scroll": 1,
+            "format": {
+                "months":   "<span color='#cba6f7'><b>{}</b></span>",
+                "days":     "<span color='#cdd6f4'>{}</span>",
+                "weeks":    "<span color='#94e2d5'><b>W{}</b></span>",
+                "weekdays": "<span color='#f9e2af'><b>{}</b></span>",
+                "today":    "<span color='#f38ba8'><b><u>{}</u></b></span>"
+            }
         },
-        "format": "{icon} {capacity}%",
-        "format-charging": " {capacity}%",
-        "format-plugged": " {capacity}%",
-        "format-alt": "{time} {icon}",
-        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+        "actions": {
+            "on-click-right": "mode",
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
+    },
+
+    "mpris": {
+        "format": "{player_icon} {dynamic}",
+        "format-paused": "{status_icon} <i>{dynamic}</i>",
+        "format-stopped": "",
+        "dynamic-order": ["title", "artist"],
+        "dynamic-len": 40,
+        "title-len": 28,
+        "artist-len": 18,
+        "player-icons": { "default": "󰎇", "spotify": "󰓇", "firefox": "󰈹", "zen": "󰈹", "mpv": "󰐹", "chromium": "󰊯" },
+        "status-icons": { "paused": "󰏤", "playing": "󰐊" },
+        "on-click": "playerctl play-pause",
+        "on-click-right": "playerctl next",
+        "on-click-middle": "playerctl previous",
+        "on-scroll-up": "playerctl position 5+",
+        "on-scroll-down": "playerctl position 5-",
+        "tooltip-format": "{player}: {title}\n{artist} — {album}\n{position}/{length}"
+    },
+
+    // ---- right -----------------------------------------------------------
+    // less-used toggles live in a hover drawer behind the "tools" icon
+    "group/tools": {
+        "orientation": "inherit",
+        "drawer": {
+            "transition-duration": 300,
+            "children-class": "drawer-child",
+            "transition-left-to-right": false
+        },
+        "modules": ["custom/tools", "idle_inhibitor", "custom/nightlight", "power-profiles-daemon", "disk"]
+    },
+    "custom/tools": {
+        "format": "󰒓",
+        "tooltip-format": "hover: caffeine · night light · power profile · disk"
+    },
+    "cpu": {
+        "interval": 5,
+        "format": "󰍛 {usage}%",
+        "tooltip-format": "CPU {usage}%  ·  {load}",
+        "on-click": "kitty --class btop --title btop btop"
+    },
+    "memory": {
+        "interval": 10,
+        "format": "󰘚 {percentage}%",
+        "tooltip-format": "RAM {used:0.1f} / {total:0.1f} GiB\nswap {swapUsed:0.1f} / {swapTotal:0.1f} GiB",
+        "on-click": "kitty --class btop --title btop btop"
+    },
+    "temperature": {
+        "interval": 5,
+        "hwmon-path-abs": "/sys/devices/platform/coretemp.0/hwmon",
+        "input-filename": "temp1_input",
+        "critical-threshold": 85,
+        "format": "󰔏 {temperatureC}°",
+        "format-critical": "󰸁 {temperatureC}°",
+        "tooltip-format": "CPU package {temperatureC}°C"
+    },
+    "disk": {
+        "interval": 60,
+        "path": "/",
+        "format": "󰋊 {percentage_used}%",
+        "tooltip-format": "{used} / {total} used on {path}\n{free} free"
+    },
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8,
+        "show-passive-items": true
+    },
+
+    "privacy": {
+        "icon-spacing": 6,
+        "icon-size": 14,
+        "transition-duration": 250,
+        "modules": [
+            { "type": "screenshare", "tooltip": true, "tooltip-icon-size": 24 },
+            { "type": "audio-in",    "tooltip": true, "tooltip-icon-size": 24 }
+        ]
+    },
+
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "format-icons": { "activated": "󰅶", "deactivated": "󰾪" },
+        "tooltip-format-activated": "Caffeine on — screen stays awake",
+        "tooltip-format-deactivated": "Caffeine off — click to keep the screen awake"
+    },
+
+    "custom/nightlight": {
+        "exec": "~/.config/hypr/scripts/nightlight status",
+        "return-type": "json",
+        "interval": 60,
+        "signal": 9,
+        "format": "{}",
+        "on-click": "~/.config/hypr/scripts/nightlight toggle; pkill -RTMIN+9 waybar"
     },
 
     "pulseaudio": {
         "format": "{icon} {volume}%",
-        "format-muted": "",
-        "on-click": "pamixer -t",
-        "on-click-right": "pavucontrol",
-        "on-scroll-up": "pamixer -i 5",
-        "on-scroll-down": "pamixer -d 5",
-        "scroll-step": 5,
+        "format-bluetooth": "󰂰 {volume}%",
+        "format-bluetooth-muted": "󰂲",
+        "format-muted": "󰝟",
         "format-icons": {
-            "headphone": "",
-            "hands-free": "",
-            "headset": "",
-            "phone": "",
-            "portable": "",
-            "car": "",
-            "default": ["", "", ""]
+            "headphone": "󰋋",
+            "hands-free": "󰋎",
+            "headset": "󰋎",
+            "phone": "",
+            "portable": "",
+            "car": "",
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        "scroll-step": 5,
+        "on-click": "pavucontrol",
+        "on-click-right": "swayosd-client --output-volume mute-toggle",
+        "on-scroll-up": "swayosd-client --output-volume raise",
+        "on-scroll-down": "swayosd-client --output-volume lower",
+        "tooltip-format": "{desc}\n{volume}%"
+    },
+    "pulseaudio#microphone": {
+        "format": "{format_source}",
+        "format-source": "󰍬 {volume}%",
+        "format-source-muted": "󰍭",
+        "on-click": "swayosd-client --input-volume mute-toggle",
+        "on-click-right": "pavucontrol -t 4",
+        "on-scroll-up": "swayosd-client --input-volume raise",
+        "on-scroll-down": "swayosd-client --input-volume lower",
+        "tooltip-format": "Microphone {source_volume}%"
+    },
+
+    "backlight": {
+        "format": "{icon} {percent}%",
+        "format-icons": ["󰃞", "󰃟", "󰃠"],
+        "on-scroll-up": "swayosd-client --brightness raise",
+        "on-scroll-down": "swayosd-client --brightness lower",
+        "tooltip-format": "Brightness {percent}%"
+    },
+
+    "bluetooth": {
+        "format": "󰂯",
+        "format-disabled": "󰂲",
+        "format-off": "󰂲",
+        "format-connected": "󰂱 {device_alias}",
+        "format-connected-battery": "󰂱 {device_alias} {device_battery_percentage}%",
+        "tooltip-format": "{controller_alias}\t{controller_address}\n{num_connections} connected",
+        "tooltip-format-connected": "{controller_alias}\t{controller_address}\n{num_connections} connected\n\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
+        "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
+        "on-click": "blueman-manager",
+        "on-click-right": "bluetoothctl power toggle"
+    },
+
+    "network": {
+        "interval": 5,
+        "format-wifi": "{icon}",
+        "format-ethernet": "󰈀",
+        "format-linked": "󰈀",
+        "format-disconnected": "󰤮",
+        "format-disabled": "󰤭",
+        "format-icons": ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"],
+        "tooltip-format-wifi": "{essid} ({signalStrength}%)  {frequency} GHz\n{ifname}  {ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}   󰕒 {bandwidthUpBits}",
+        "tooltip-format-ethernet": "{ifname}  {ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}   󰕒 {bandwidthUpBits}",
+        "tooltip-format-disconnected": "Disconnected",
+        "on-click": "kitty --class nmtui --title nmtui nmtui",
+        "on-click-right": "nm-connection-editor"
+    },
+
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}\nclick to cycle",
+        "tooltip": true,
+        "format-icons": {
+            "default": "󰗑",
+            "performance": "󰓅",
+            "balanced": "󰗑",
+            "power-saver": "󰌪"
         }
     },
 
-    "pulseaudio#microphone": {
-        "format": "{format_source}",
-        "format-source": " {volume}%",
-        "format-source-muted": "",
-        "on-click": "pamixer --default-source -t",
-        "on-click-right": "pavucontrol",
-        "on-scroll-up": "pamixer --default-source -i 5",
-        "on-scroll-down": "pamixer --default-source -d 5",
-        "scroll-step": 5
+    "battery": {
+        "bat": "BAT0",
+        "adapter": "ADP1",
+        "interval": 30,
+        "states": { "good": 90, "warning": 25, "critical": 12 },
+        "format": "{icon} {capacity}%",
+        "format-charging": "󰂄 {capacity}%",
+        "format-plugged": "󰚥 {capacity}%",
+        "format-full": "󰁹 {capacity}%",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+        "tooltip-format": "{timeTo}\n{power:0.1f} W  ·  {cycles} cycles  ·  health {health}%"
     },
-    
-    "temperature": {
-        "thermal-zone": 1,
-        "format": " {temperatureF}°F",
-        "critical-threshold": 70,
-        "format-critical": " {temperatureC}°C",
-        "on-click": "kitty --start-as=fullscreen --title btop sh -c 'btop'"
+
+    "custom/updates": {
+        "exec": "~/.config/waybar/scripts/updates",
+        "return-type": "json",
+        "interval": 1800,
+        "signal": 8,
+        "format": "{}",
+        "on-click": "~/.config/waybar/scripts/updates update"
+    },
+
+    "custom/notification": {
+        "exec": "swaync-client -swb",
+        "return-type": "json",
+        "exec-if": "which swaync-client",
+        "escape": true,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "󱅫",
+            "none": "󰂚",
+            "dnd-notification": "󰂛",
+            "dnd-none": "󰂛",
+            "inhibited-notification": "󱅫",
+            "inhibited-none": "󰂚",
+            "dnd-inhibited-notification": "󰂛",
+            "dnd-inhibited-none": "󰂛"
+        },
+        "tooltip-format": "Notifications  ·  SUPER+SHIFT+N\nright-click: do not disturb",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw"
+    },
+
+    "custom/power": {
+        "format": "󰐥",
+        "tooltip-format": "Power menu  ·  SUPER+Esc",
+        "on-click": "~/.config/rofi/scripts/powermenu"
     }
 }

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Power menu (SUPER+Escape) — terminal style. Reboot & shutdown ask for a
+# y/N confirmation, then go through hyprshutdown so apps close gracefully.
+set -uo pipefail
+THEME="$HOME/.config/rofi/menu.rasi"
+TAB=$(printf '\t')
+PROMPT="$USER@$(uname -n) ~ \$"
+RED='listview { lines: 5; } window { width: 620px; } * { accent: @red; }'
+DIM="#6c7086"
+
+menu() { # menu PROMPT THEME-STR MESSAGE
+    rofi -dmenu -i -markup-rows -p "$1" -theme "$THEME" -theme-str "$2" -mesg "$3" \
+         -display-columns 1 -display-column-separator "$TAB"
+}
+row() { printf '%s  <b>%-9s</b> <span foreground="%s"># %s</span>%s%s\n' "$1" "$2" "$DIM" "$3" "$TAB" "$4"; }
+
+choice=$( {
+    row "󰌾" "lock"     "loginctl lock-session"                 "lock"
+    row "󰤄" "suspend"  "systemctl suspend"                     "suspend"
+    row "󰍃" "logout"   "hyprshutdown"                          "logout"
+    row "󰑓" "reboot"   "hyprshutdown, then systemctl reboot"   "reboot"
+    row "󰐥" "poweroff" "hyprshutdown, then systemctl poweroff" "poweroff"
+} | menu "$PROMPT" "$RED" "select action · Enter runs it · Esc aborts") || exit 0
+action="${choice##*"$TAB"}"
+
+confirm() { # confirm VERB
+    local ans
+    ans=$( printf '%s\n' \
+        "y  <b>yes</b> <span foreground=\"$DIM\"># $1 now</span>${TAB}yes" \
+        "n  <b>no</b>  <span foreground=\"$DIM\"># cancel</span>${TAB}no" \
+        | menu "$1? [y/N]" 'listview { lines: 2; } window { width: 420px; } * { accent: @red; }' "this closes every open app first" ) || return 1
+    [[ "${ans##*"$TAB"}" == "yes" ]]
+}
+
+case "$action" in
+    lock)     loginctl lock-session ;;
+    suspend)  systemctl suspend ;;
+    logout)   confirm "logout"   && hyprshutdown ;;
+    reboot)   confirm "reboot"   && hyprshutdown -t 'Restarting…'    --post-cmd 'systemctl reboot' ;;
+    poweroff) confirm "poweroff" && hyprshutdown -t 'Shutting down…' --post-cmd 'systemctl poweroff' ;;
+esac

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Pending package updates (official + AUR) for waybar. `updates update` opens a
+# terminal running yay -Syu and refreshes the module afterwards.
+set -uo pipefail
+
+if [[ "${1:-}" == "update" ]]; then
+    kitty --class update-sys --title update-sys sh -c 'yay -Syu; echo; read -rp "Done — press Enter to close"'
+    pkill -RTMIN+8 waybar
+    exit 0
+fi
+
+official=$(checkupdates 2>/dev/null | wc -l)
+aur=$(yay -Qua 2>/dev/null | wc -l)
+total=$((official + aur))
+
+if (( total == 0 )); then
+    printf '{"text":"","tooltip":"System is up to date","class":"updated"}\n'
+else
+    printf '{"text":"󰏗 %d","tooltip":"%d official · %d AUR updates\\nclick to update","class":"has-updates"}\n' "$total" "$official" "$aur"
+fi
