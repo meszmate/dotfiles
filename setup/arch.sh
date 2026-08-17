@@ -32,7 +32,13 @@ ok()   { printf '  \e[1;32m✔\e[0m %s\n' "$*"; }
 warn() { printf '  \e[1;33m⚠\e[0m %s\n' "$*"; }
 err()  { printf '  \e[1;31m✘\e[0m %s\n' "$*" >&2; }
 note() { printf '  \e[1;34m➜\e[0m %s\n' "$*"; }
-section() { printf '\n\e[1;35m==> %s\e[0m\n' "$*"; }
+
+STEP=0
+TOTAL_STEPS=8
+section() {
+  STEP=$((STEP + 1))
+  printf '\n\e[1;35m━━━ [%d/%d] %s\e[0m\n' "$STEP" "$TOTAL_STEPS" "$*"
+}
 
 trap 'err "Setup failed at line $LINENO. Details: $INSTLOG"' ERR
 
@@ -49,8 +55,11 @@ done
 
 # Ask a yes/no question; plain Enter means yes.
 ask() {
-  [[ $ASSUME_YES -eq 1 ]] && return 0
-  local answer
+  if [[ $ASSUME_YES -eq 1 ]]; then
+    printf '  \e[1;33m?\e[0m %s — yes (auto)\n' "$1"
+    return 0
+  fi
+  local answer=""
   read -rp "$(printf '  \e[1;33m?\e[0m %s [Y/n] ' "$1")" answer
   [[ ! $answer =~ ^[Nn] ]]
 }
@@ -73,30 +82,54 @@ sudo -v
 ( while sudo -n true 2>/dev/null; do sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
 
 # ------------------------------------------------------------
+# Preferences — everything is asked here, then the setup runs
+# on its own showing progress. Enter always picks the default.
+# ------------------------------------------------------------
+P_PKGS=0 P_DEV=0 P_BT=0 P_BROWSER=0 P_ZSH=0 P_CONFIGS=0 P_SVC=0 P_SDDM=0
+
+printf '\n\e[1;36mA few questions first — then everything runs on its own:\e[0m\n\n'
+if [[ $ASSUME_YES -eq 0 && "$INSTALL_MODE" == "symlink" ]]; then
+  read -rp "$(printf '  \e[1;33m?\e[0m Symlink configs (live-sync with repo, recommended) or copy? [S/c] ')" mode_answer
+  [[ $mode_answer =~ ^[Cc] ]] && INSTALL_MODE="copy"
+fi
+if ask "Install the desktop & all packages (Hyprland, audio, fonts, tools)?"; then P_PKGS=1; fi
+if ask "  + development toolchain (Node, Rust, Go, Java, Erlang/Elixir)?"; then P_DEV=1; fi
+if ask "  + bluetooth support (bluez, blueman)?"; then P_BT=1; fi
+if ask "  + zen browser (AUR)?"; then P_BROWSER=1; fi
+if ask "Set up zsh (oh-my-zsh, plugins, login shell)?"; then P_ZSH=1; fi
+if ask "Install config files ($INSTALL_MODE mode)?"; then P_CONFIGS=1; fi
+if ask "Enable system services (NetworkManager, sddm, bluetooth)?"; then P_SVC=1; fi
+if ask "Install the minimal-sddm login theme?"; then P_SDDM=1; fi
+printf '\n  \e[1;36mAll set — running the full setup now.\e[0m\n'
+
+# ------------------------------------------------------------
 # Base tools + clone the repo itself if missing
 # ------------------------------------------------------------
-section "Base tools (git, base-devel)"
+section "Base tools & dotfiles repository"
+note "Installing base-devel and git..."
 sudo pacman -Sy --needed --noconfirm base-devel git >>"$INSTLOG" 2>&1
 ok "base-devel and git present"
 
 if [[ ! -d "$DOTFILES_DIR/.git" ]]; then
-  section "Cloning dotfiles to $DOTFILES_DIR"
+  note "Cloning dotfiles to $DOTFILES_DIR..."
   git clone --recurse-submodules "$REPO_URL" "$DOTFILES_DIR" >>"$INSTLOG" 2>&1
   ok "Repository cloned"
+else
+  ok "Repository already present at $DOTFILES_DIR"
 fi
 git -C "$DOTFILES_DIR" submodule update --init >>"$INSTLOG" 2>&1 || warn "Could not update the nvim submodule (check network)."
 
 # ------------------------------------------------------------
 # AUR helper (yay)
 # ------------------------------------------------------------
-section "AUR helper"
+section "AUR helper (yay)"
 if command -v yay >/dev/null; then
   ok "yay already installed"
 else
-  note "Building yay-bin from the AUR..."
+  note "Building yay-bin from the AUR (output shown live)..."
   YAY_TMP=$(mktemp -d)
   git clone https://aur.archlinux.org/yay-bin.git "$YAY_TMP" >>"$INSTLOG" 2>&1
-  ( cd "$YAY_TMP" && makepkg -si --noconfirm >>"$INSTLOG" 2>&1 )
+  ( cd "$YAY_TMP" && makepkg -si --noconfirm )
   rm -rf "$YAY_TMP"
   ok "yay installed"
 fi
@@ -104,24 +137,22 @@ fi
 # ------------------------------------------------------------
 # Packages
 # ------------------------------------------------------------
-PACMAN_PKGS=(
+CORE_PKGS=(
   # Hyprland desktop
   hyprland hyprlock hypridle xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
   qt5-wayland qt6-wayland polkit-gnome
   waybar wofi mako libnotify hyprpaper grim slurp swappy wl-clipboard cliphist
   # Terminal, shell & CLI tools
   kitty zsh starship tmux fzf zoxide eza bat fd ripgrep lazygit btop
-  man-db unzip wget
+  man-db unzip wget neovim
   # Audio
   pipewire pipewire-alsa pipewire-pulse wireplumber pamixer pavucontrol playerctl
-  # Network & bluetooth
-  networkmanager network-manager-applet bluez bluez-utils blueman
+  # Network
+  networkmanager network-manager-applet
   # Files
   thunar thunar-archive-plugin file-roller gvfs
   # System utilities
   brightnessctl pacman-contrib python-requests xdg-user-dirs
-  # Development
-  neovim nodejs npm rustup go jdk-openjdk erlang elixir
   # Fonts
   ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji inter-font
   # Login manager (theme needs the qt6 modules)
@@ -129,35 +160,44 @@ PACMAN_PKGS=(
   # GTK theming
   nwg-look adw-gtk-theme papirus-icon-theme adwaita-icon-theme
 )
-AUR_PKGS=(
-  zen-browser-bin
-)
+DEV_PKGS=(nodejs npm rustup go jdk-openjdk erlang elixir)
+BT_PKGS=(bluez bluez-utils blueman)
+AUR_PKGS=(zen-browser-bin)
 
-if ask "Update the system and install all packages?"; then
-  section "System update"
-  sudo pacman -Syu --noconfirm >>"$INSTLOG" 2>&1
+section "System update & packages"
+if [[ $P_PKGS -eq 1 ]]; then
+  PKGS=("${CORE_PKGS[@]}")
+  [[ $P_DEV -eq 1 ]] && PKGS+=("${DEV_PKGS[@]}")
+  [[ $P_BT -eq 1 ]] && PKGS+=("${BT_PKGS[@]}")
+
+  note "Updating the system (pacman output shown live)..."
+  sudo pacman -Syu --noconfirm
   ok "System up to date"
 
-  section "Installing ${#PACMAN_PKGS[@]} official packages"
-  sudo pacman -S --needed --noconfirm "${PACMAN_PKGS[@]}" >>"$INSTLOG" 2>&1
+  note "Installing ${#PKGS[@]} official packages..."
+  sudo pacman -S --needed --noconfirm "${PKGS[@]}"
   ok "Official packages installed"
 
-  section "Installing ${#AUR_PKGS[@]} AUR packages"
-  yay -S --needed --noconfirm "${AUR_PKGS[@]}" >>"$INSTLOG" 2>&1
-  ok "AUR packages installed"
+  if [[ $P_BROWSER -eq 1 ]]; then
+    note "Installing ${#AUR_PKGS[@]} AUR package(s)..."
+    yay -S --needed --noconfirm "${AUR_PKGS[@]}"
+    ok "AUR packages installed"
+  fi
 
-  if ! rustup show active-toolchain >/dev/null 2>&1; then
+  if [[ $P_DEV -eq 1 ]] && ! rustup show active-toolchain >/dev/null 2>&1; then
     note "Setting up the stable Rust toolchain..."
     rustup default stable >>"$INSTLOG" 2>&1
     ok "rust stable ready"
   fi
+else
+  warn "Skipped package installation"
 fi
 
 # ------------------------------------------------------------
 # Zsh: oh-my-zsh, plugins, default shell
 # ------------------------------------------------------------
-if ask "Set up zsh (oh-my-zsh, plugins, make it your login shell)?"; then
-  section "Zsh"
+section "Zsh & shell"
+if [[ $P_ZSH -eq 1 ]]; then
   if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
     RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
       sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" >>"$INSTLOG" 2>&1
@@ -182,6 +222,8 @@ if ask "Set up zsh (oh-my-zsh, plugins, make it your login shell)?"; then
   else
     ok "zsh is already the login shell"
   fi
+else
+  warn "Skipped zsh setup"
 fi
 
 # ------------------------------------------------------------
@@ -219,14 +261,15 @@ install_path() {
   fi
 }
 
-if ask "Install config files ($INSTALL_MODE mode)?"; then
-  section "Configs → ~/.config"
+section "Config files ($INSTALL_MODE mode)"
+if [[ $P_CONFIGS -eq 1 ]]; then
+  note "Configs → ~/.config"
   mkdir -p "$HOME/.config"
   for src in "$CONFIG_DIR"/*; do
     install_path "$src" "$HOME/.config/$(basename "$src")"
   done
 
-  section "Home dotfiles → ~"
+  note "Home dotfiles → ~"
   for src in "$HOMEFILES_DIR"/.*; do
     [[ -f "$src" ]] || continue
     [[ "$(basename "$src")" == ._* ]] && continue # macOS metadata junk
@@ -243,28 +286,34 @@ if ask "Install config files ($INSTALL_MODE mode)?"; then
       > "$HOME/.config/hypr/monitors.conf"
     ok "Created default hypr/monitors.conf (edit it for your monitor layout)"
   fi
+else
+  warn "Skipped config files"
 fi
 
 # ------------------------------------------------------------
 # System services
 # ------------------------------------------------------------
-if ask "Enable system services (NetworkManager, bluetooth, sddm)?"; then
-  section "Services"
+section "System services"
+if [[ $P_SVC -eq 1 ]]; then
   sudo systemctl enable NetworkManager.service >>"$INSTLOG" 2>&1 && ok "NetworkManager enabled"
-  sudo systemctl enable bluetooth.service >>"$INSTLOG" 2>&1 && ok "bluetooth enabled"
+  [[ $P_BT -eq 1 ]] && sudo systemctl enable bluetooth.service >>"$INSTLOG" 2>&1 && ok "bluetooth enabled"
   sudo systemctl enable sddm.service >>"$INSTLOG" 2>&1 && ok "sddm enabled"
+else
+  warn "Skipped services"
 fi
 
 # ------------------------------------------------------------
 # SDDM theme
 # ------------------------------------------------------------
-if ask "Install the minimal-sddm login theme?"; then
-  section "SDDM theme"
+section "SDDM login theme"
+if [[ $P_SDDM -eq 1 ]]; then
   sudo mkdir -p /usr/share/sddm/themes /etc/sddm.conf.d
   sudo rm -rf /usr/share/sddm/themes/minimal-sddm
   sudo cp -r "$DOTFILES_DIR/setup/minimal-sddm" /usr/share/sddm/themes/minimal-sddm
   sudo cp "$DOTFILES_DIR/setup/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
   ok "Theme installed to /usr/share/sddm/themes/minimal-sddm"
+else
+  warn "Skipped SDDM theme"
 fi
 
 echo
