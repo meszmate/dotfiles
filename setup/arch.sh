@@ -14,6 +14,8 @@
 #  Flags:
 #    -y, --yes    non-interactive, answer yes to everything
 #    --copy       copy config files instead of symlinking them
+#    --sync       unattended re-run used by dotfiles-sync: pulls in
+#                 new packages/configs, skips root-config steps
 # ============================================================
 
 set -Eeuo pipefail
@@ -26,7 +28,9 @@ BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 INSTLOG="$HOME/dotfiles-install.log"
 
 ASSUME_YES=0
+SYNC_MODE=0
 INSTALL_MODE="symlink"
+PREFS_FILE="$HOME/.config/dotfiles-prefs"
 
 ok()   { printf '  \e[1;32m✔\e[0m %s\n' "$*"; }
 warn() { printf '  \e[1;33m⚠\e[0m %s\n' "$*"; }
@@ -34,7 +38,7 @@ err()  { printf '  \e[1;31m✘\e[0m %s\n' "$*" >&2; }
 note() { printf '  \e[1;34m➜\e[0m %s\n' "$*"; }
 
 STEP=0
-TOTAL_STEPS=8
+TOTAL_STEPS=9
 section() {
   STEP=$((STEP + 1))
   printf '\n\e[1;35m━━━ [%d/%d] %s\e[0m\n' "$STEP" "$TOTAL_STEPS" "$*"
@@ -42,11 +46,12 @@ section() {
 
 trap 'err "Setup failed at line $LINENO. Details: $INSTLOG"' ERR
 
-usage() { sed -n '2,17p' "$0"; exit 0; }
+usage() { sed -n '2,19p' "$0"; exit 0; }
 
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) ASSUME_YES=1 ;;
+    --sync)   SYNC_MODE=1; ASSUME_YES=1 ;;
     --copy)   INSTALL_MODE="copy" ;;
     -h|--help) usage ;;
     *) err "Unknown option: $arg"; exit 1 ;;
@@ -77,30 +82,53 @@ echo "============================================"
 : > "$INSTLOG"
 note "Full command output is logged to $INSTLOG"
 
-note "Asking for sudo up front (kept alive for the whole run)..."
-sudo -v
-( while sudo -n true 2>/dev/null; do sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
+if [[ $SYNC_MODE -eq 0 ]]; then
+  note "Asking for sudo up front (kept alive for the whole run)..."
+  sudo -v
+  ( while sudo -n true 2>/dev/null; do sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
+fi
 
 # ------------------------------------------------------------
 # Preferences — everything is asked here, then the setup runs
 # on its own showing progress. Enter always picks the default.
 # ------------------------------------------------------------
-P_PKGS=0 P_DEV=0 P_BT=0 P_BROWSER=0 P_ZSH=0 P_CONFIGS=0 P_SVC=0 P_SDDM=0
+P_PKGS=0 P_DEV=0 P_BT=0 P_BROWSER=0 P_ZSH=0 P_CONFIGS=0 P_SVC=0 P_SDDM=0 P_AUTOSYNC=0
 
-printf '\n\e[1;36mA few questions first — then everything runs on its own:\e[0m\n\n'
-if [[ $ASSUME_YES -eq 0 && "$INSTALL_MODE" == "symlink" ]]; then
-  read -rp "$(printf '  \e[1;33m?\e[0m Symlink configs (live-sync with repo, recommended) or copy? [S/c] ')" mode_answer
-  [[ $mode_answer =~ ^[Cc] ]] && INSTALL_MODE="copy"
+if [[ $SYNC_MODE -eq 1 ]]; then
+  # Reuse the answers from the original install; default to everything.
+  P_PKGS=1 P_DEV=1 P_BT=1 P_BROWSER=1 P_ZSH=1 P_CONFIGS=1
+  # shellcheck source=/dev/null
+  [[ -f "$PREFS_FILE" ]] && source "$PREFS_FILE"
+  P_SVC=0 P_SDDM=0 P_AUTOSYNC=0 # root-config steps are skipped in sync runs
+else
+  printf '\n\e[1;36mA few questions first — then everything runs on its own:\e[0m\n\n'
+  if [[ $ASSUME_YES -eq 0 && "$INSTALL_MODE" == "symlink" ]]; then
+    read -rp "$(printf '  \e[1;33m?\e[0m Symlink configs (live-sync with repo, recommended) or copy? [S/c] ')" mode_answer
+    [[ $mode_answer =~ ^[Cc] ]] && INSTALL_MODE="copy"
+  fi
+  if ask "Install the desktop & all packages (Hyprland, audio, fonts, tools)?"; then P_PKGS=1; fi
+  if ask "  + development toolchain (Node, Rust, Go, Java, Erlang/Elixir)?"; then P_DEV=1; fi
+  if ask "  + bluetooth support (bluez, blueman)?"; then P_BT=1; fi
+  if ask "  + zen browser (AUR)?"; then P_BROWSER=1; fi
+  if ask "Set up zsh (oh-my-zsh, plugins, login shell)?"; then P_ZSH=1; fi
+  if ask "Install config files ($INSTALL_MODE mode)?"; then P_CONFIGS=1; fi
+  if ask "Enable system services (NetworkManager, sddm, bluetooth)?"; then P_SVC=1; fi
+  if ask "Install the minimal-sddm login theme?"; then P_SDDM=1; fi
+  if ask "Enable automatic sync (timer pulls repo & installs new packages)?"; then P_AUTOSYNC=1; fi
+  printf '\n  \e[1;36mAll set — running the full setup now.\e[0m\n'
+
+  # Remember the answers so `dotfiles-sync` applies the same selection.
+  mkdir -p "$(dirname "$PREFS_FILE")"
+  cat > "$PREFS_FILE" <<EOF
+INSTALL_MODE=$INSTALL_MODE
+P_PKGS=$P_PKGS
+P_DEV=$P_DEV
+P_BT=$P_BT
+P_BROWSER=$P_BROWSER
+P_ZSH=$P_ZSH
+P_CONFIGS=$P_CONFIGS
+EOF
 fi
-if ask "Install the desktop & all packages (Hyprland, audio, fonts, tools)?"; then P_PKGS=1; fi
-if ask "  + development toolchain (Node, Rust, Go, Java, Erlang/Elixir)?"; then P_DEV=1; fi
-if ask "  + bluetooth support (bluez, blueman)?"; then P_BT=1; fi
-if ask "  + zen browser (AUR)?"; then P_BROWSER=1; fi
-if ask "Set up zsh (oh-my-zsh, plugins, login shell)?"; then P_ZSH=1; fi
-if ask "Install config files ($INSTALL_MODE mode)?"; then P_CONFIGS=1; fi
-if ask "Enable system services (NetworkManager, sddm, bluetooth)?"; then P_SVC=1; fi
-if ask "Install the minimal-sddm login theme?"; then P_SDDM=1; fi
-printf '\n  \e[1;36mAll set — running the full setup now.\e[0m\n'
 
 # ------------------------------------------------------------
 # Base tools + clone the repo itself if missing
@@ -142,6 +170,7 @@ CORE_PKGS=(
   hyprland hyprlock hypridle xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
   qt5-wayland qt6-wayland polkit-gnome
   waybar wofi mako libnotify hyprpaper grim slurp swappy wl-clipboard cliphist
+  wf-recorder hyprpicker
   # Terminal, shell & CLI tools
   kitty zsh starship tmux fzf zoxide eza bat fd ripgrep lazygit btop
   man-db unzip wget neovim
@@ -316,16 +345,52 @@ else
   warn "Skipped SDDM theme"
 fi
 
+# ------------------------------------------------------------
+# Automatic sync (systemd user timer)
+# ------------------------------------------------------------
+section "Automatic sync"
+if [[ $P_AUTOSYNC -eq 1 ]]; then
+  mkdir -p "$HOME/.local/bin" "$HOME/.config/systemd/user"
+  ln -sf "$DOTFILES_DIR/setup/dotfiles-sync" "$HOME/.local/bin/dotfiles-sync"
+  cp "$DOTFILES_DIR/setup/systemd/dotfiles-sync.service" \
+     "$DOTFILES_DIR/setup/systemd/dotfiles-sync.timer" \
+     "$HOME/.config/systemd/user/"
+  ok "dotfiles-sync command and timer units installed"
+
+  # The timer runs without a terminal, so pacman needs passwordless sudo.
+  printf '%s ALL=(ALL) NOPASSWD: /usr/bin/pacman\n' "$USER" | sudo tee /etc/sudoers.d/11-dotfiles-sync >/dev/null
+  sudo chmod 440 /etc/sudoers.d/11-dotfiles-sync
+  if sudo visudo -cf /etc/sudoers.d/11-dotfiles-sync >/dev/null; then
+    ok "Passwordless pacman for $USER (only pacman — /etc/sudoers.d/11-dotfiles-sync)"
+  else
+    sudo rm -f /etc/sudoers.d/11-dotfiles-sync
+    err "sudoers validation failed — auto-sync will need a manual 'dotfiles-sync' run"
+  fi
+
+  systemctl --user daemon-reload >>"$INSTLOG" 2>&1 || true
+  if systemctl --user enable dotfiles-sync.timer >>"$INSTLOG" 2>&1; then
+    ok "Timer enabled: 3 min after boot, then every 6 h (run 'dotfiles-sync' anytime)"
+  else
+    warn "Could not enable the user timer now — run: systemctl --user enable --now dotfiles-sync.timer"
+  fi
+elif [[ $SYNC_MODE -eq 1 ]]; then
+  ok "Sync run complete"
+else
+  warn "Skipped automatic sync"
+fi
+
 echo
 echo "============================================"
 echo "  ✅ All done!"
 echo "============================================"
-echo
-echo "  Next steps:"
-echo "   • Reboot (or 'systemctl start sddm') to log in to Hyprland"
-echo "   • Adjust ~/dotfiles/config/hypr/monitors.conf for your displays"
-echo "   • First nvim start installs plugins & language servers automatically"
-echo "   • In tmux, press ctrl-a + I once to install tmux plugins"
-echo
-[[ -d "$BACKUP_DIR" ]] && echo "  Your previous configs were backed up to: $BACKUP_DIR"
+if [[ $SYNC_MODE -eq 0 ]]; then
+  echo
+  echo "  Next steps:"
+  echo "   • Reboot (or 'systemctl start sddm') to log in to Hyprland"
+  echo "   • Adjust ~/dotfiles/config/hypr/monitors.conf for your displays"
+  echo "   • First nvim start installs plugins & language servers automatically"
+  echo "   • In tmux, press ctrl-a + I once to install tmux plugins"
+  echo
+  [[ -d "$BACKUP_DIR" ]] && echo "  Your previous configs were backed up to: $BACKUP_DIR"
+fi
 exit 0
