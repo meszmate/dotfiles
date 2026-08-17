@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Pulls the dotfiles repo and applies whatever changed: newly added
+# packages get installed, new configs get linked, system gets updated.
+# Run manually with `dotfiles-sync`, or automatically via the
+# dotfiles-sync.timer systemd user timer.
+
+set -Eeuo pipefail
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+STATE_DIR="$HOME/.local/state"
+LOG="$STATE_DIR/dotfiles-sync.log"
+
+mkdir -p "$STATE_DIR"
+# Interactive runs show output; timer runs land in the log.
+if [[ ! -t 1 ]]; then
+  exec >>"$LOG" 2>&1
+fi
+
+echo "=== dotfiles-sync $(date '+%F %T') ==="
+cd "$DOTFILES_DIR"
+
+before=$(git rev-parse HEAD)
+git fetch --quiet origin
+if ! git merge --ff-only '@{u}' >/dev/null 2>&1; then
+  echo "Local commits diverge from origin — not pulling. Resolve manually."
+fi
+git submodule update --init --quiet
+after=$(git rev-parse HEAD)
+
+"$DOTFILES_DIR/setup/arch.sh" --sync
+
+if [[ "$before" != "$after" ]]; then
+  summary=$(git log --oneline "$before..$after" | head -5)
+  echo "Applied updates:"
+  echo "$summary"
+  command -v notify-send >/dev/null && notify-send "Dotfiles updated" "$summary" || true
+  command -v hyprctl >/dev/null && hyprctl reload >/dev/null 2>&1 || true
+else
+  echo "Already up to date (packages/configs re-checked)."
+fi
+echo "=== done ==="
