@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# screenshot <region|window|output|menu> [copy|save|edit]
+#   region  – select an area with slurp
+#   window  – pick the active window
+#   output  – whole focused monitor
+#   menu    – rofi menu with all combinations
+# copy → clipboard, save → ~/Pictures/Screenshots, edit → swappy (annotate)
+set -euo pipefail
+
+DIR="${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
+mkdir -p "$DIR"
+FILE="$DIR/$(date +%Y-%m-%d_%H-%M-%S).png"
+
+target="${1:-region}"
+action="${2:-copy}"
+
+if [[ "$target" == "menu" ]]; then
+    TAB=$(printf '\t')
+    choice=$(printf '%s\n' \
+        "󰆞  Region → clipboard${TAB}region copy" \
+        "󰆞  Region → annotate${TAB}region edit" \
+        "󰆞  Region → save file${TAB}region save" \
+        "󰖯  Window → clipboard${TAB}window copy" \
+        "󰖯  Window → save file${TAB}window save" \
+        "󰍹  Screen → clipboard${TAB}output copy" \
+        "󰍹  Screen → save file${TAB}output save" \
+        "󰍹  Screen → annotate${TAB}output edit" \
+        | rofi -dmenu -i -p "$USER@$(uname -n) ~ \$ grim" -theme "$HOME/.config/rofi/menu.rasi" -display-columns 1 -display-column-separator "$TAB" -theme-str 'window { width: 440px; } listview { lines: 8; }') || exit 0
+    read -r target action <<< "${choice##*"$TAB"}"
+fi
+
+geometry() {
+    case "$target" in
+        region) slurp -d -b '#1e1e2e66' -c '#cba6f7ff' -s '#00000000' -w 2 ;;
+        window)
+            hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' ;;
+        output)
+            hyprctl monitors -j | jq -r '.[] | select(.focused) | "\(.x),\(.y) \(.width)x\(.height)"' ;;
+        *) echo "unknown target: $target" >&2; exit 1 ;;
+    esac
+}
+
+geo=$(geometry) || exit 0
+[[ -z "$geo" ]] && exit 0
+# tiny pause so the slurp overlay is gone before grabbing
+sleep 0.15
+
+case "$action" in
+    copy)
+        grim -g "$geo" - | wl-copy --type image/png
+        notify-send -a Screenshot -i camera-photo "Screenshot copied" "$target → clipboard" ;;
+    save)
+        grim -g "$geo" "$FILE"
+        wl-copy --type image/png < "$FILE"
+        notify-send -a Screenshot -i "$FILE" "Screenshot saved" "$FILE" ;;
+    edit)
+        grim -g "$geo" - | swappy -f - -o "$FILE" && [[ -f "$FILE" ]] \
+            && notify-send -a Screenshot -i "$FILE" "Screenshot saved" "$FILE" ;;
+    *) echo "unknown action: $action" >&2; exit 1 ;;
+esac

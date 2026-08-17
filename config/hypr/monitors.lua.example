@@ -1,0 +1,13 @@
+-- Machine-local monitor layout — copy to monitors.lua (gitignored).
+-- setup/arch.sh creates monitors.lua automatically on first install.
+-- Docs: https://wiki.hypr.land/Configuring/Basics/Monitors/
+-- List outputs with: hyprctl monitors all
+
+-- Laptop panel
+hl.monitor({ output = "eDP-1", mode = "preferred", position = "0x0", scale = 1 })
+
+-- External display to the right, e.g.:
+-- hl.monitor({ output = "DP-1", mode = "2560x1440@144", position = "auto-right", scale = 1 })
+
+-- Anything else that gets plugged in
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })

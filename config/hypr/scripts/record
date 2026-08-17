@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Toggle a screen recording (wf-recorder). First press: pick a region and start
+# recording (Escape in slurp = whole screen). Second press: stop and notify.
+set -uo pipefail
+DIR="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
+mkdir -p "$DIR"
+
+if pgrep -x wf-recorder >/dev/null; then
+    pkill -INT -x wf-recorder
+    sleep 0.5
+    last=$(command ls -t "$DIR"/*.mp4 2>/dev/null | head -1)
+    notify-send -a Recording -i media-record "Recording saved" "${last:-$DIR}"
+    exit 0
+fi
+
+file="$DIR/rec-$(date +%Y-%m-%d_%H-%M-%S).mp4"
+geo=$(slurp -d -b '#1e1e2e66' -c '#f38ba8ff' -s '#00000000' -w 2 2>/dev/null) || geo=""
+notify-send -a Recording -i media-record -t 2500 "Recording started" "SUPER+SHIFT+R stops it"
+if [[ -n "$geo" ]]; then
+    exec wf-recorder -g "$geo" -f "$file" -c libx264rgb 2>/dev/null || exec wf-recorder -g "$geo" -f "$file"
+else
+    exec wf-recorder -f "$file"
+fi

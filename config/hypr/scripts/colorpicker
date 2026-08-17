@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Pick a colour from the screen, copy the hex code, show it in a notification.
+set -uo pipefail
+color=$(hyprpicker -a -f hex 2>/dev/null) || exit 0
+[[ -z "$color" ]] && exit 0
+notify-send -a "Colour picker" -i color-select "$color" "copied to clipboard"

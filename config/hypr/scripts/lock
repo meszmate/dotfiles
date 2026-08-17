@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Lock the session with hyprlock — robustly. Used by hypridle's lock_cmd (so
+# `loginctl lock-session` and SUPER+. both end up here).
+#   • already locked           → nothing to do
+#   • stale hyprlock lingering → kill it (it can't lock; `pidof hyprlock ||`
+#                                 would silently do nothing forever)
+#   • otherwise                → refresh the pre-rendered backgrounds, lock
+set -u
+if [[ "$(hyprctl locked 2>/dev/null)" == "true" ]]; then exit 0; fi
+if pgrep -x hyprlock >/dev/null; then
+    pkill -x hyprlock; sleep 0.3
+fi
+"$HOME/.config/hypr/scripts/lock-fx" prepare
+exec hyprlock "$@"

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# hyprsunset helper: `nightlight toggle|on|off|status`
+# on  = warm (4500K), off = back to the current profile in hyprsunset.conf
+set -uo pipefail
+STATE="${XDG_RUNTIME_DIR:-/tmp}/nightlight-manual"
+TEMP="${NIGHTLIGHT_TEMP:-4500}"
+
+pgrep -x hyprsunset >/dev/null || hyprsunset & disown
+
+case "${1:-toggle}" in
+    on)     hyprctl hyprsunset temperature "$TEMP" >/dev/null && touch "$STATE" ;;
+    off)    hyprctl hyprsunset identity >/dev/null && rm -f "$STATE" ;;
+    toggle) if [[ -f "$STATE" ]]; then "$0" off; else "$0" on; fi
+            notify-send -a "Night light" -i weather-clear-night -t 1500 "Night light" "$([[ -f "$STATE" ]] && echo on || echo off)" ;;
+    status) # for waybar
+            if [[ -f "$STATE" ]]; then echo '{"text":"󱩌","tooltip":"Night light: on (manual) — click to toggle","class":"on"}'
+            else echo '{"text":"󰖨","tooltip":"Night light: schedule (hyprsunset.conf) — click to force on","class":"off"}'; fi ;;
+esac

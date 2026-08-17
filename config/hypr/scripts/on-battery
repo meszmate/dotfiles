@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# exit 0 when running on battery (no AC adapter online) — used by hypridle to
+# only auto-suspend when unplugged, so long-running jobs on AC are safe.
+for f in /sys/class/power_supply/*/online; do
+    [[ -r "$f" ]] && [[ "$(<"$f")" == "1" ]] && exit 1
+done
+exit 0

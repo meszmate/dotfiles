@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# hyprlock "hacker mode" — effects that play for ~5 s after a wrong password.
+#
+#   avatar     poller: called by hyprlock every 200 ms with $ATTEMPTS. Prints the
+#              avatar glyph; when the count grows it records the failure and
+#              starts the driver.
+#   drive      (internal, detached) sends hyprlock SIGUSR2 at ~8 fps for 5 s so
+#              the update:0:1 labels below re-render frame by frame.
+#   center     glitch → decode "ACCESS DENIED", strike counter, countermeasure bar
+#   log        intrusion log typed out line by line (bottom-left)
+#   stream     hex dump stream (bottom-right)
+#   background prints the wallpaper path — the red-tinted "alarm" copy while the
+#              sequence runs (hyprlock crossfades)
+#   prepare    render the alarm wallpaper into ~/.cache/hyprlock (ffmpeg, async)
+#   trigger    start the sequence without a real failed attempt (testing)
+#
+# Everything is plain bash builtins so a frame costs ~2 ms.
+export LC_ALL=C.UTF-8
+# hyprlock's spawnSync leaks its pipe write-ends into children (fds ≥ 3); a
+# detached job that inherits them keeps hyprlock's worker blocked until it
+# exits. Close everything above stderr first thing.
+fds=(); for fdpath in /proc/$$/fd/*; do fd=${fdpath##*/}; (( fd > 2 )) && [[ ! "$fdpath" -ef "$0" ]] && fds+=("$fd"); done
+for fd in "${fds[@]}"; do eval "exec $fd>&-" 2>/dev/null; done
+D="${XDG_RUNTIME_DIR:-/tmp}/hyprlock-fx"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/hyprlock"
+WALL_LINK="$HOME/.config/hypr/wallpaper.current"
+[[ -d "$D" ]] || mkdir -p "$D"
+
+# Timeline (ms after the failure); after T_BAR the state holds until retry
+T_BURST=500 T_DECODE=1700 T_BAR=3400
+T_SLOW=60000     # after a minute: 1 tick/s
+T_FREEZE=600000  # after 10 min: stop ticking (state stays, no CPU)
+FRAME=150
+
+# Palette
+RED='#f38ba8' MAROON='#eba0ac' PEACH='#fab387' YELLOW='#f9e2af' GREEN='#a6e3a1'
+BLUE='#89b4fa' MAUVE='#cba6f7' TEXT='#cdd6f4' SUB='#a6adc8' DIM='#6c7086'
+GLYPHS='!@#$%^*+=?/\|~[]{}01AF7E3C9B░▒▓█▚▞▙▟'
+GLEN=${#GLYPHS}
+
+now_ms() { local t=${EPOCHREALTIME//[.,]/}; NOW=$(( t / 1000 )); }
+readf()  { local f="$D/$1"; if [[ -r "$f" ]]; then read -r "$2" < "$f"; else printf -v "$2" '%s' "${3:-0}"; fi; }
+
+# --- state ------------------------------------------------------------------
+now_ms
+readf since SINCE 0
+readf retry RETRY 0
+readf force FORCE 0
+(( FORCE > 0 && NOW - FORCE < 30000 )) && SINCE=$FORCE
+EL=$(( NOW - SINCE ))
+ACTIVE=0; (( SINCE > 0 && RETRY < SINCE )) && ACTIVE=1
+readf attempts ATT 0
+
+# --- deterministic per-frame randomness ---------------------------------------
+frame=$(( EL / FRAME ))
+seed=$(( (frame * 2654435761 + 7) & 0x7fffffff ))
+rnd() { seed=$(( (seed * 1103515245 + 12345) & 0x7fffffff )); R=$(( (seed >> 8) % $1 )); }
+glitch() { # glitch N → GL: N random glyphs
+    local n=$1 i; GL=""
+    for (( i = 0; i < n; i++ )); do rnd "$GLEN"; GL+=${GLYPHS:R:1}; done
+}
+hexline() { # hexline ADDR → HX: "0xADDR  16 bytes"
+    local i b; printf -v HX '0x%08x  ' "$1"
+    for (( i = 0; i < 16; i++ )); do rnd 256; printf -v b '%02x' "$R"; HX+="$b "; (( i == 7 )) && HX+=" "; done
+}
+esc() { local s=$1; s=${s//&/&amp;}; s=${s//</&lt;}; s=${s//>/&gt;}; ESC=$s; }
+
+WALLBLUR="$CACHE/wall.jpg"     # blurred/darkened copy of the wallpaper (hyprlock's normal background)
+ALARM="$CACHE/alarm.jpg"       # red, scan-lined copy shown while the sequence runs
+wallpaper() { WALL=$(readlink -f "$WALL_LINK" 2>/dev/null); [[ -z "$WALL" ]] && WALL="$HOME/.config/hypr/wallpaper.jpg"; }
+# "path mtime" of the wallpaper the cache was rendered from — decides staleness
+cache_stale() { wallpaper; local m stamp; m=$(stat -c %Y "$WALL" 2>/dev/null); read -r stamp < "$CACHE/wall.src" 2>/dev/null; [[ "$stamp" != "$WALL $m" || ! -s "$WALLBLUR" || ! -s "$ALARM" ]]; }
+
+case "${1:-}" in
+# ---------------------------------------------------------------------------
+avatar)
+    a=${2:-0}; [[ $a =~ ^[0-9]+$ ]] || a=0
+    if (( a > ATT )); then
+        printf '%s\n' "$NOW" > "$D/since"; printf '%s\n' "$a" > "$D/attempts"; rm -f "$D/retry"
+        # our (grand)parent is the hyprlock that runs this label — the driver signals only it
+        hlpid=""; pp=$PPID
+        for _ in 1 2 3; do
+            [[ -r "/proc/$pp/comm" && "$(<"/proc/$pp/comm")" == hyprlock ]] && { hlpid=$pp; break; }
+            [[ -r "/proc/$pp/status" ]] || break
+            while read -r k v; do [[ $k == PPid: ]] && pp=$v; done < "/proc/$pp/status"
+        done
+        [[ -n "$hlpid" ]] && printf '%s\n' "$hlpid" > "$D/hyprlock.pid" || rm -f "$D/hyprlock.pid"
+        # cache network info once (spawns are fine here, not per frame)
+        { ip -o route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++){if($i=="dev")d=$(i+1); if($i=="src")s=$(i+1)}; print d, s}'
+          "$HOME/.config/hypr/scripts/lockinfo" network 2>/dev/null; } > "$D/net" 2>/dev/null &
+        : > "$D/armed"                       # first keypress → lua/lockfx.lua → lock-fx retry
+        setsid -f "$0" drive >/dev/null 2>&1 < /dev/null
+        SINCE=$NOW; EL=0; ACTIVE=1
+    elif (( a < ATT )); then   # new hyprlock session → reset
+        printf '%s\n' "$a" > "$D/attempts"; printf '0\n' > "$D/since"; rm -f "$D/retry" "$D/armed" "$D/alarm.checked"; ACTIVE=0
+    fi
+    if [[ ! -e "$D/alarm.checked" ]]; then      # once per lock session: make sure the cached backgrounds are current
+        : > "$D/alarm.checked"
+        cache_stale && setsid -f "$0" prepare >/dev/null 2>&1 < /dev/null
+    fi
+    if (( ACTIVE )); then
+        if   (( EL < T_BURST )); then (( (EL / 100) % 2 )) && g="󰀦" || g="󰅚"; c=$RED
+        elif (( EL < T_BAR ));   then g="󰀦"; c=$RED
+        else                          g="󰌾"; c=$RED; fi
+        printf '<span foreground="%s">%s</span>\n' "$c" "$g"
+    else
+        printf '󰌾\n'
+    fi ;;
+# ---------------------------------------------------------------------------
+drive)
+    exec 9>"$D/driver.lock"; flock -n 9 || exit 0
+    HLPID=""; [[ -r "$D/hyprlock.pid" ]] && read -r HLPID < "$D/hyprlock.pid"
+    [[ "$HLPID" =~ ^[0-9]+$ ]] && (( HLPID > 1 )) || HLPID=""
+    tick() { if [[ -n "$HLPID" ]]; then kill -USR2 "$HLPID" 2>/dev/null; else pkill -USR2 -x hyprlock; fi; }
+    while :; do
+        tick || exit 0
+        now_ms; readf since SINCE 0; readf retry RETRY 0
+        (( SINCE > 0 && RETRY < SINCE )) || break         # retry (or reset) → stop
+        el=$(( NOW - SINCE ))
+        if   (( el < T_BAR + 1500 )); then sleep 0.15
+        elif (( el < T_SLOW ));       then sleep 0.25
+        elif (( el < T_FREEZE ));     then sleep 1
+        else break; fi                                    # frozen: state stays until retry
+    done
+    for _ in 1 2 3; do sleep 0.2; tick || exit 0; done   # flush: labels re-render their final state
+    ;;
+# ---------------------------------------------------------------------------
+retry)
+    (( ACTIVE )) || exit 0
+    printf '%s\n' "$NOW" > "$D/retry"; rm -f "$D/armed"
+    HLPID=""; [[ -r "$D/hyprlock.pid" ]] && read -r HLPID < "$D/hyprlock.pid"
+    for _ in 1 2 3; do
+        if [[ "$HLPID" =~ ^[0-9]+$ ]] && (( HLPID > 1 )); then kill -USR2 "$HLPID" 2>/dev/null; else pkill -USR2 -x hyprlock; fi
+        sleep 0.2
+    done ;;
+# ---------------------------------------------------------------------------
+trigger)
+    printf '%s\n' "$NOW" > "$D/since"; rm -f "$D/retry" "$D/hyprlock.pid"; : > "$D/armed"
+    { ip -o route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++){if($i=="dev")d=$(i+1); if($i=="src")s=$(i+1)}; print d, s}'
+      "$HOME/.config/hypr/scripts/lockinfo" network 2>/dev/null; } > "$D/net" 2>/dev/null
+    setsid -f "$0" drive >/dev/null 2>&1 < /dev/null
+    echo "triggered" ;;
+# ---------------------------------------------------------------------------
+center)
+    (( ACTIVE )) || { printf '<span letter_spacing="7168" weight="bold">LOCKED</span>\n'; exit 0; }
+    MSG="ACCESS DENIED"; L=${#MSG}
+    if (( EL < T_BURST )); then
+        glitch "$L"; head=$GL
+    elif (( EL < T_DECODE )); then
+        k=$(( (EL - T_BURST) * L / (T_DECODE - T_BURST) )); glitch $(( L - k )); head="${MSG:0:k}$GL"
+    else
+        head=$MSG
+        if (( frame % 11 == 0 )); then   # occasional flicker while holding
+            rnd "$L"; i=$R; rnd "$GLEN"; head="${MSG:0:i}${GLYPHS:R:1}${MSG:i+1}"
+        fi
+    fi
+    esc "$head"
+    printf -v out '<span weight="bold" letter_spacing="3072" foreground="%s">%s</span>' "$RED" "$ESC"
+    if (( EL >= T_DECODE )); then
+        strikes=$(( ATT > 0 ? ATT : 1 ))
+        printf -v tmp '\n<span size="11264" foreground="%s">strike %d/3 · 3 strikes = 10 min lockout</span>' "$SUB" "$strikes"; out+=$tmp
+        if (( EL < T_BAR )); then
+            p=$(( (EL - T_DECODE) * 100 / (T_BAR - T_DECODE) )); f=$(( p * 22 / 100 )); bar=""
+            for (( i = 0; i < 22; i++ )); do (( i < f )) && bar+="▓" || bar+="░"; done
+            printf -v tmp '\n<span size="11264" foreground="%s">COUNTERMEASURES [%s] %3d%%</span>' "$PEACH" "$bar" "$p"; out+=$tmp
+        else
+            printf -v tmp '\n<span size="11264" foreground="%s">COUNTERMEASURES [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] SYSTEM LOCKED</span>' "$RED"; out+=$tmp
+            (( (EL / 600) % 2 )) && cur="▌" || cur=" "
+            printf -v tmp '\n<span size="11264" foreground="%s">%s type to retry</span>' "$DIM" "$cur"; out+=$tmp
+        fi
+    fi
+    [[ -e "$D/debug" ]] && printf -v tmp '\n<span size="10240" foreground="%s">EL=%d now=%d</span>' "$GREEN" "$EL" $(( NOW % 100000 )) && out+=$tmp
+    printf '%s\n' "$out" ;;
+# ---------------------------------------------------------------------------
+log)
+    (( ACTIVE )) || { printf '\n'; exit 0; }
+    iface=""; ip=""; ssid=""
+    [[ -r "$D/net" ]] && { read -r iface ip; read -r ssid; } < "$D/net"
+    read -r kernel < /proc/sys/kernel/osrelease; read -r host < /proc/sys/kernel/hostname
+    read -r l1 _ _ _ _ < /proc/loadavg; read -r up _ < /proc/uptime; up=${up%.*}
+    printf -v uptime '%dh %02dm' $(( up / 3600 )) $(( up % 3600 / 60 ))
+    esc "${ssid:-offline}"; ssid=$ESC
+    strikes=$(( ATT > 0 ? ATT : 1 ))
+    seed=$(( (SINCE * 31 + 11) & 0x7fffffff ))   # memory dump stays stable across frames
+    hexline $((0x7ffd3a1c)); h1=$HX; hexline $((0x7ffd3a2c)); h2=$HX; hexline $((0x7ffd3a3c)); h3=$HX
+    lines=(
+        "0|$RED|auth |pam_unix(hyprlock:auth): authentication failure · uid=$UID user=$USER"
+        "11|$PEACH|sec  |faillock: strike $strikes/3 · 3 strikes = 10 min lockout"
+        "23|$YELLOW|trace|origin ${ip:-local} via ${iface:-console} ($ssid) · tty${XDG_VTNR:-?}"
+        "41|$DIM|mem  |dumping input buffer"
+        "41|$DIM|     |$h1"
+        "42|$DIM|     |$h2"
+        "42|$DIM|     |$h3"
+        "60|$TEXT|kbd  |keyboard buffer purged"
+        "118|$BLUE|sys  |$host · linux $kernel · load $l1 · up $uptime"
+        "240|$MAUVE|fx   |countermeasures armed"
+        "801|$GREEN|lock |session sealed · awaiting valid credentials"
+    )
+    out=""; i=0
+    for spec in "${lines[@]}"; do
+        (( EL >= 250 + i * 170 )) || break
+        IFS='|' read -r off col tag msg <<< "$spec"
+        at=$(( SINCE + off )); printf -v t '%(%H:%M:%S)T.%03d' $(( at / 1000 )) $(( at % 1000 ))
+        printf -v tmp '<span foreground="%s">[%s]</span> <span foreground="%s" weight="bold">%s</span> %s\n' "$DIM" "$t" "$col" "$tag" "$msg"; out+=$tmp
+        (( i++ ))
+    done
+    if (( EL >= T_BAR )); then   # live tail while holding
+        printf -v t '%(%H:%M:%S)T.%03d' $(( NOW / 1000 )) $(( NOW % 1000 ))
+        printf -v held '%02d:%02d' $(( EL / 60000 )) $(( EL / 1000 % 60 ))
+        printf -v tmp '<span foreground="%s">[%s]</span> <span foreground="%s" weight="bold">%s</span> %s\n' "$DIM" "$t" "$RED" "wait " "awaiting retry · alarm held for $held"; out+=$tmp
+    fi
+    [[ -n "$out" ]] && printf '%s\n' "${out%$'\n'}" || printf '\n' ;;
+# ---------------------------------------------------------------------------
+stream)
+    (( ACTIVE )) || { printf '\n'; exit 0; }
+    out=""; addr=$(( 0x7f3a00 + (frame % 64) * 16 ))
+    for (( i = 0; i < 8; i++ )); do hexline $(( addr + i * 16 )); out+="$HX"$'\n'; done
+    printf '<span foreground="%s">%s</span>\n' "$MAROON" "${out%$'\n'}" ;;
+# ---------------------------------------------------------------------------
+background)
+    if (( ACTIVE )) && [[ -s "$ALARM" ]]; then printf '%s\n' "$ALARM"; else printf '%s\n' "$WALLBLUR"; fi ;;
+# ---------------------------------------------------------------------------
+prepare)
+    command -v ffmpeg >/dev/null || exit 0
+    mkdir -p "$CACHE"
+    cache_stale || exit 0
+    exec 9>"$D/preparing"; flock -n 9 || exit 0
+    m=$(stat -c %Y "$WALL" 2>/dev/null)
+    # normal: soft blur + darker, roughly what hyprlock's own blur_passes=2 looked like
+    ffmpeg -loglevel error -y -i "$WALL" -vf \
+        "scale='min(2560,iw)':-2,gblur=sigma=11,eq=brightness=-0.15:contrast=0.92:saturation=1.15" \
+        -q:v 3 "$WALLBLUR.tmp.jpg" && mv "$WALLBLUR.tmp.jpg" "$WALLBLUR"
+    # alarm: same blur, red tint, film noise, scanlines, vignette
+    ffmpeg -loglevel error -y -i "$WALL" -vf \
+        "scale='min(2560,iw)':-2,gblur=sigma=8,hue=s=0.3,colorbalance=rs=0.45:gs=-0.2:bs=-0.25:rm=0.35:gm=-0.1:bm=-0.15,eq=contrast=1.2:brightness=-0.18,noise=alls=12:allf=t,drawgrid=w=iw:h=3:t=1:c=black@0.55,vignette=PI/3.5" \
+        -q:v 4 "$ALARM.tmp.jpg" && mv "$ALARM.tmp.jpg" "$ALARM"
+    printf '%s %s\n' "$WALL" "$m" > "$CACHE/wall.src"
+    rm -f "$D/preparing" "$D/alarm.checked"
+    pkill -USR2 -x hyprlock 2>/dev/null   # a running hyprlock re-evaluates its background
+    ;;
+# ---------------------------------------------------------------------------
+*) echo "usage: lock-fx <avatar|center|log|stream|background|prepare|trigger|retry> [attempts]" >&2; exit 1 ;;
+esac

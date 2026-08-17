@@ -1,2 +1,5 @@
-# local config
+# machine-local files
 monitors.conf
+monitors.lua
+local.lua
+wallpaper.current
