@@ -24,6 +24,7 @@ REPO_URL="https://github.com/meszmate/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
 CONFIG_DIR="$DOTFILES_DIR/config"
 HOMEFILES_DIR="$DOTFILES_DIR/home"
+BIN_DIR="$DOTFILES_DIR/bin"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 INSTLOG="$HOME/dotfiles-install.log"
 
@@ -38,7 +39,7 @@ err()  { printf '  \e[1;31m✘\e[0m %s\n' "$*" >&2; }
 note() { printf '  \e[1;34m➜\e[0m %s\n' "$*"; }
 
 STEP=0
-TOTAL_STEPS=9
+TOTAL_STEPS=10
 section() {
   STEP=$((STEP + 1))
   printf '\n\e[1;35m━━━ [%d/%d] %s\e[0m\n' "$STEP" "$TOTAL_STEPS" "$*"
@@ -92,11 +93,11 @@ fi
 # Preferences — everything is asked here, then the setup runs
 # on its own showing progress. Enter always picks the default.
 # ------------------------------------------------------------
-P_PKGS=0 P_DEV=0 P_BT=0 P_BROWSER=0 P_ZSH=0 P_CONFIGS=0 P_SVC=0 P_SDDM=0 P_AUTOSYNC=0
+P_PKGS=0 P_DEV=0 P_AI=0 P_BT=0 P_BROWSER=0 P_ZSH=0 P_CONFIGS=0 P_SVC=0 P_SDDM=0 P_AUTOSYNC=0
 
 if [[ $SYNC_MODE -eq 1 ]]; then
   # Reuse the answers from the original install; default to everything.
-  P_PKGS=1 P_DEV=1 P_BT=1 P_BROWSER=1 P_ZSH=1 P_CONFIGS=1
+  P_PKGS=1 P_DEV=1 P_AI=1 P_BT=1 P_BROWSER=1 P_ZSH=1 P_CONFIGS=1
   # shellcheck source=/dev/null
   [[ -f "$PREFS_FILE" ]] && source "$PREFS_FILE"
   P_SVC=0 P_SDDM=0 P_AUTOSYNC=0 # root-config steps are skipped in sync runs
@@ -107,27 +108,29 @@ else
     [[ $mode_answer =~ ^[Cc] ]] && INSTALL_MODE="copy"
   fi
   if ask "Install the desktop & all packages (Hyprland, audio, fonts, tools)?"; then P_PKGS=1; fi
-  if ask "  + development toolchain (Node, Rust, Go, Java, Erlang/Elixir)?"; then P_DEV=1; fi
+  if ask "  + development toolchain (Node/Bun/pnpm, Python/uv, Rust, Go, Java, Elixir, C/C++, Zig, Docker)?"; then P_DEV=1; fi
+  if ask "  + AI coding tools (Claude Code, T3 Code, GitHub CLI, desktop notifications for agents)?"; then P_AI=1; fi
   if ask "  + bluetooth support (bluez, blueman)?"; then P_BT=1; fi
   if ask "  + zen browser (AUR)?"; then P_BROWSER=1; fi
   if ask "Set up zsh (oh-my-zsh, plugins, login shell)?"; then P_ZSH=1; fi
   if ask "Install config files ($INSTALL_MODE mode)?"; then P_CONFIGS=1; fi
-  if ask "Enable system services (NetworkManager, sddm, bluetooth)?"; then P_SVC=1; fi
-  if ask "Install the minimal-sddm login theme?"; then P_SDDM=1; fi
+  if ask "Enable system services (NetworkManager, sddm, bluetooth, power-profiles, docker)?"; then P_SVC=1; fi
+  if ask "Install the minimal-sddm login theme (same wallpaper as the lock screen)?"; then P_SDDM=1; fi
   if ask "Enable automatic sync (timer pulls repo & installs new packages)?"; then P_AUTOSYNC=1; fi
   printf '\n  \e[1;36mAll set — running the full setup now.\e[0m\n'
 
   # Remember the answers so `dotfiles-sync` applies the same selection.
   mkdir -p "$(dirname "$PREFS_FILE")"
-  cat > "$PREFS_FILE" <<EOF
+  cat > "$PREFS_FILE" <<EOP
 INSTALL_MODE=$INSTALL_MODE
 P_PKGS=$P_PKGS
 P_DEV=$P_DEV
+P_AI=$P_AI
 P_BT=$P_BT
 P_BROWSER=$P_BROWSER
 P_ZSH=$P_ZSH
 P_CONFIGS=$P_CONFIGS
-EOF
+EOP
 fi
 
 # ------------------------------------------------------------
@@ -166,38 +169,58 @@ fi
 # Packages
 # ------------------------------------------------------------
 CORE_PKGS=(
-  # Hyprland desktop
-  hyprland hyprlock hypridle xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
-  qt5-wayland qt6-wayland polkit-gnome
-  waybar wofi mako libnotify hyprpaper grim slurp swappy wl-clipboard cliphist
-  wf-recorder hyprpicker
+  # Hyprland + first-party ecosystem
+  hyprland hyprlock hypridle hyprpaper hyprpicker hyprsunset hyprshutdown hyprpolkitagent
+  xdg-desktop-portal-hyprland xdg-desktop-portal-gtk qt5-wayland qt6-wayland
+  # Desktop shell: bar, launcher, notifications, OSD
+  waybar rofi rofi-calc rofi-emoji swaync swayosd libnotify
+  # Screenshots, recording, clipboard
+  grim slurp swappy wf-recorder wl-clipboard cliphist wl-clip-persist
   # Terminal, shell & CLI tools
-  kitty zsh starship tmux fzf zoxide eza bat fd ripgrep lazygit btop
+  kitty zsh starship tmux fzf zoxide eza bat fd ripgrep jq lazygit btop
   man-db unzip wget neovim
   # Audio
   pipewire pipewire-alsa pipewire-pulse wireplumber pamixer pavucontrol playerctl
   # Network
   networkmanager network-manager-applet
   # Files
-  thunar thunar-archive-plugin file-roller gvfs
+  thunar thunar-archive-plugin thunar-volman tumbler file-roller gvfs
   # System utilities
-  brightnessctl pacman-contrib python-requests xdg-user-dirs
+  brightnessctl power-profiles-daemon pacman-contrib xdg-user-dirs
   # Fonts
   ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji inter-font
   # Login manager (theme needs the qt6 modules)
   sddm qt6-svg qt6-5compat qt6-declarative
-  # GTK theming
-  nwg-look adw-gtk-theme papirus-icon-theme adwaita-icon-theme
+  # GTK / Qt theming
+  nwg-look adw-gtk-theme papirus-icon-theme adwaita-icon-theme qt6ct qt5ct
 )
-DEV_PKGS=(nodejs npm rustup go jdk-openjdk erlang elixir)
+DEV_PKGS=(
+  # JavaScript / TypeScript
+  nodejs npm pnpm bun
+  # Python
+  python uv ruff
+  # Rust, Go, Java, Elixir
+  rustup go jdk-openjdk erlang elixir
+  # C / C++ / Zig
+  clang cmake zig
+  # Lua (also used by the Hyprland config; lua-language-server for editor completion)
+  lua luarocks lua-language-server stylua
+  # Containers & git tooling
+  docker docker-compose lazydocker git-delta direnv
+  # Shell / misc language tooling
+  shellcheck shfmt tree-sitter-cli
+)
+AI_PKGS=(github-cli)
+AI_AUR_PKGS=(t3code-bin)
 BT_PKGS=(bluez bluez-utils blueman)
-AUR_PKGS=(zen-browser-bin)
+BROWSER_AUR_PKGS=(zen-browser-bin)
 
 section "System update & packages"
 if [[ $P_PKGS -eq 1 ]]; then
   PKGS=("${CORE_PKGS[@]}")
   [[ $P_DEV -eq 1 ]] && PKGS+=("${DEV_PKGS[@]}")
-  [[ $P_BT -eq 1 ]] && PKGS+=("${BT_PKGS[@]}")
+  [[ $P_AI -eq 1 ]]  && PKGS+=("${AI_PKGS[@]}")
+  [[ $P_BT -eq 1 ]]  && PKGS+=("${BT_PKGS[@]}")
 
   note "Updating the system (pacman output shown live)..."
   sudo pacman -Syu --noconfirm
@@ -207,9 +230,12 @@ if [[ $P_PKGS -eq 1 ]]; then
   sudo pacman -S --needed --noconfirm "${PKGS[@]}"
   ok "Official packages installed"
 
-  if [[ $P_BROWSER -eq 1 ]]; then
-    note "Installing ${#AUR_PKGS[@]} AUR package(s)..."
-    yay -S --needed --noconfirm "${AUR_PKGS[@]}"
+  AUR=()
+  [[ $P_BROWSER -eq 1 ]] && AUR+=("${BROWSER_AUR_PKGS[@]}")
+  [[ $P_AI -eq 1 ]] && AUR+=("${AI_AUR_PKGS[@]}")
+  if [[ ${#AUR[@]} -gt 0 ]]; then
+    note "Installing ${#AUR[@]} AUR package(s): ${AUR[*]}"
+    yay -S --needed --noconfirm "${AUR[@]}"
     ok "AUR packages installed"
   fi
 
@@ -220,6 +246,30 @@ if [[ $P_PKGS -eq 1 ]]; then
   fi
 else
   warn "Skipped package installation"
+fi
+
+# ------------------------------------------------------------
+# AI coding tools: Claude Code + hooks for desktop notifications
+# ------------------------------------------------------------
+section "AI coding tools"
+if [[ $P_AI -eq 1 ]]; then
+  if command -v claude >/dev/null || [[ -x "$HOME/.local/bin/claude" ]]; then
+    ok "Claude Code already installed"
+  else
+    note "Installing Claude Code (official installer → ~/.local/bin/claude)..."
+    if curl -fsSL https://claude.ai/install.sh | bash >>"$INSTLOG" 2>&1; then
+      ok "Claude Code installed — run 'claude' once to log in"
+    else
+      warn "Claude Code installer failed (see $INSTLOG); install later with: curl -fsSL https://claude.ai/install.sh | bash"
+    fi
+  fi
+  command -v t3code >/dev/null && ok "T3 Code installed (t3code — drives claude/codex/opencode CLIs)"
+  # Notifications when an agent needs input / finishes (bin/claude-notify)
+  if command -v jq >/dev/null; then
+    "$DOTFILES_DIR/setup/claude-hooks-install" >>"$INSTLOG" 2>&1 && ok "Claude Code notification hooks configured (~/.claude/settings.json)"
+  fi
+else
+  warn "Skipped AI tools"
 fi
 
 # ------------------------------------------------------------
@@ -290,12 +340,32 @@ install_path() {
   fi
 }
 
+# Convert a legacy hyprlang `monitor = NAME,MODE,POS,SCALE` line into Lua.
+monitors_conf_to_lua() {
+  awk -F'[=,]' '
+    /^[[:space:]]*monitor[[:space:]]*=/ {
+      for (i = 2; i <= NF; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i)
+      out = $2; mode = (NF >= 3 ? $3 : "preferred"); pos = (NF >= 4 ? $4 : "auto"); scale = (NF >= 5 ? $5 : "auto")
+      if (scale ~ /^[0-9.]+$/) sc = scale; else sc = "\"" scale "\""
+      printf "hl.monitor({ output = \"%s\", mode = \"%s\", position = \"%s\", scale = %s })\n", out, mode, pos, sc
+    }' "$1"
+}
+
 section "Config files ($INSTALL_MODE mode)"
 if [[ $P_CONFIGS -eq 1 ]]; then
   note "Configs → ~/.config"
   mkdir -p "$HOME/.config"
   for src in "$CONFIG_DIR"/*; do
+    [[ -e "$src" ]] || continue
     install_path "$src" "$HOME/.config/$(basename "$src")"
+  done
+
+  # Symlinks in ~/.config that point into the repo but whose target vanished
+  # (configs removed from the repo, e.g. wofi/mako → rofi/swaync)
+  for link in "$HOME/.config"/*; do
+    if [[ -L "$link" && ! -e "$link" && "$(readlink "$link")" == "$CONFIG_DIR"/* ]]; then
+      rm -f "$link" && warn "Removed dangling link $(basename "$link") (config no longer in repo)"
+    fi
   done
 
   note "Home dotfiles → ~"
@@ -305,16 +375,44 @@ if [[ $P_CONFIGS -eq 1 ]]; then
     install_path "$src" "$HOME/$(basename "$src")"
   done
 
+  note "Scripts → ~/.local/bin"
+  mkdir -p "$HOME/.local/bin"
+  for src in "$BIN_DIR"/*; do
+    [[ -f "$src" ]] || continue
+    ln -sfn "$src" "$HOME/.local/bin/$(basename "$src")"
+  done
+  ok "bin/* linked into ~/.local/bin"
+
   # Standard ~/Documents, ~/Downloads, ... directories
   command -v xdg-user-dirs-update >/dev/null && xdg-user-dirs-update && ok "XDG user directories created"
 
-  # Machine-local monitor config (gitignored) — Hyprland sources it and
-  # errors if it does not exist.
-  if [[ ! -f "$HOME/.config/hypr/monitors.conf" ]]; then
-    printf '# Machine-local monitor layout — not tracked by git.\n# See https://wiki.hypr.land/Configuring/Monitors/\nmonitor = ,preferred,auto,1\n' \
-      > "$HOME/.config/hypr/monitors.conf"
-    ok "Created default hypr/monitors.conf (edit it for your monitor layout)"
+  # Machine-local monitor layout (gitignored). Hyprland uses the Lua config;
+  # a legacy monitors.conf from an older install is converted automatically.
+  HYPR="$HOME/.config/hypr"
+  if [[ ! -f "$HYPR/monitors.lua" ]]; then
+    {
+      printf -- '-- Machine-local monitor layout — not tracked by git.\n'
+      printf -- '-- Docs: https://wiki.hypr.land/Configuring/Basics/Monitors/   (hyprctl monitors all)\n'
+      if [[ -f "$HYPR/monitors.conf" ]] && grep -qE '^[[:space:]]*monitor[[:space:]]*=' "$HYPR/monitors.conf"; then
+        monitors_conf_to_lua "$HYPR/monitors.conf"
+      else
+        printf 'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })\n'
+      fi
+    } > "$HYPR/monitors.lua"
+    ok "Created hypr/monitors.lua (edit it for your monitor layout)"
   fi
+  [[ -f "$HYPR/monitors.conf" ]] && rm -f "$HYPR/monitors.conf" && ok "Removed legacy hypr/monitors.conf (converted to monitors.lua)"
+
+  # Wallpaper symlink used by hyprpaper + hyprlock (the picker repoints it)
+  [[ -e "$HYPR/wallpaper.current" ]] || ln -s wallpaper.jpg "$HYPR/wallpaper.current"
+
+  # qt6ct/qt5ct store the palette path absolutely → generate from templates
+  for q in qt6ct qt5ct; do
+    if [[ -f "$HOME/.config/$q/$q.conf.in" ]]; then
+      sed "s|@HOME@|$HOME|g" "$HOME/.config/$q/$q.conf.in" > "$HOME/.config/$q/$q.conf"
+    fi
+  done
+  ok "Qt theme configs generated"
 else
   warn "Skipped config files"
 fi
@@ -325,8 +423,18 @@ fi
 section "System services"
 if [[ $P_SVC -eq 1 ]]; then
   sudo systemctl enable NetworkManager.service >>"$INSTLOG" 2>&1 && ok "NetworkManager enabled"
+  # archinstall often leaves iwd/systemd-networkd/wpa_supplicant enabled next to
+  # NetworkManager → two managers fight over Wi-Fi. Make NM the only one.
+  "$DOTFILES_DIR/setup/fix-network" >>"$INSTLOG" 2>&1 && ok "NetworkManager is the single network manager (iwd backend if iwd is present)"
   [[ $P_BT -eq 1 ]] && sudo systemctl enable bluetooth.service >>"$INSTLOG" 2>&1 && ok "bluetooth enabled"
   sudo systemctl enable sddm.service >>"$INSTLOG" 2>&1 && ok "sddm enabled"
+  sudo systemctl enable --now power-profiles-daemon.service >>"$INSTLOG" 2>&1 && ok "power-profiles-daemon enabled (waybar power profile switcher)"
+  if [[ $P_DEV -eq 1 ]] && command -v docker >/dev/null; then
+    sudo systemctl enable docker.socket >>"$INSTLOG" 2>&1 && ok "docker enabled (socket-activated)"
+    if ! id -nG "$USER" | grep -qw docker; then
+      sudo usermod -aG docker "$USER" && ok "Added $USER to the docker group (re-login to use docker without sudo)"
+    fi
+  fi
 else
   warn "Skipped services"
 fi
@@ -336,11 +444,9 @@ fi
 # ------------------------------------------------------------
 section "SDDM login theme"
 if [[ $P_SDDM -eq 1 ]]; then
-  sudo mkdir -p /usr/share/sddm/themes /etc/sddm.conf.d
-  sudo rm -rf /usr/share/sddm/themes/minimal-sddm
-  sudo cp -r "$DOTFILES_DIR/setup/minimal-sddm" /usr/share/sddm/themes/minimal-sddm
-  sudo cp "$DOTFILES_DIR/setup/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
-  ok "Theme installed to /usr/share/sddm/themes/minimal-sddm"
+  # Same wallpaper on the login screen as on the desktop / lock screen
+  "$DOTFILES_DIR/setup/install-sddm-theme" >>"$INSTLOG" 2>&1
+  ok "Theme installed to /usr/share/sddm/themes/minimal-sddm (re-run setup/install-sddm-theme after changing the wallpaper)"
 else
   warn "Skipped SDDM theme"
 fi
@@ -387,9 +493,11 @@ if [[ $SYNC_MODE -eq 0 ]]; then
   echo
   echo "  Next steps:"
   echo "   • Reboot (or 'systemctl start sddm') to log in to Hyprland"
-  echo "   • Adjust ~/dotfiles/config/hypr/monitors.conf for your displays"
+  echo "   • SUPER+/ shows every keybind; SUPER+Space is the launcher"
+  echo "   • Adjust ~/.config/hypr/monitors.lua for your displays"
   echo "   • First nvim start installs plugins & language servers automatically"
   echo "   • In tmux, press ctrl-a + I once to install tmux plugins"
+  [[ $P_AI -eq 1 ]] && echo "   • Run 'claude' once to log in; T3 Code is in the launcher"
   echo
   [[ -d "$BACKUP_DIR" ]] && echo "  Your previous configs were backed up to: $BACKUP_DIR"
 fi

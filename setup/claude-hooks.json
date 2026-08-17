@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Notification": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "~/.local/bin/claude-notify" } ] }
+    ],
+    "Stop": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "~/.local/bin/claude-notify" } ] }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Fixes the classic archinstall leftover where NetworkManager, iwd,
+# systemd-networkd and wpa_supplicant all manage Wi-Fi at once (nm-applet shows
+# "disconnected" while iwd is actually online, connections flap).
+#
+# Result: NetworkManager stays the single manager and uses iwd as its Wi-Fi
+# backend (iwd's saved networks keep working); systemd-networkd and the
+# standalone wpa_supplicant unit are disabled. Needs sudo. Wi-Fi may blip once.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || exec sudo -- "$0" "$@"
+
+changed=0
+if systemctl is-enabled -q iwd 2>/dev/null || systemctl is-active -q iwd 2>/dev/null; then
+    mkdir -p /etc/NetworkManager/conf.d
+    if [[ ! -f /etc/NetworkManager/conf.d/wifi_backend.conf ]]; then
+        printf '[device]\nwifi.backend=iwd\n' > /etc/NetworkManager/conf.d/wifi_backend.conf
+        echo "NetworkManager: wifi.backend=iwd"
+        changed=1
+    fi
+fi
+for unit in systemd-networkd.service systemd-networkd.socket wpa_supplicant.service; do
+    if systemctl is-enabled -q "$unit" 2>/dev/null || systemctl is-active -q "$unit" 2>/dev/null; then
+        systemctl disable --now "$unit" >/dev/null 2>&1 && echo "disabled $unit" && changed=1
+    fi
+done
+systemctl enable NetworkManager.service >/dev/null 2>&1 || true
+if (( changed )); then
+    systemctl restart NetworkManager
+    echo "NetworkManager restarted — if Wi-Fi does not come back within ~15 s, connect once with nm-applet or: nmcli device wifi connect <SSID> --ask"
+else
+    echo "Nothing to fix: NetworkManager is already the only network manager."
+fi

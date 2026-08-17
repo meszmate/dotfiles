@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Adds the claude-notify hooks (setup/claude-hooks.json) to ~/.claude/settings.json
+# without touching anything else in there. Idempotent — safe to re-run.
+set -euo pipefail
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+FRAGMENT="$DOTFILES_DIR/setup/claude-hooks.json"
+SETTINGS="$HOME/.claude/settings.json"
+
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+mkdir -p "$HOME/.claude"
+[[ -s "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
+
+tmp=$(mktemp)
+jq -s '
+  .[0] as $cur | .[1].hooks as $add
+  | $cur
+  | .hooks = ($cur.hooks // {})
+  | reduce ($add | keys[]) as $ev (.;
+      if ([ .hooks[$ev][]?.hooks[]?.command // "" ] | any(contains("claude-notify")))
+      then .
+      else .hooks[$ev] = ((.hooks[$ev] // []) + $add[$ev])
+      end)
+' "$SETTINGS" "$FRAGMENT" > "$tmp"
+if cmp -s "$tmp" "$SETTINGS"; then
+    rm -f "$tmp"; echo "claude-notify hooks already present in $SETTINGS"
+else
+    cp "$SETTINGS" "$SETTINGS.bak"
+    mv "$tmp" "$SETTINGS"
+    echo "claude-notify hooks added to $SETTINGS (backup: settings.json.bak)"
+fi

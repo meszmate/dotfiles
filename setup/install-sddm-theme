@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Installs/updates the minimal-sddm login theme with the current wallpaper so
+# the login screen matches the lock screen and desktop. Needs sudo.
+set -euo pipefail
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+WALL="$DOTFILES_DIR/config/hypr/wallpaper.jpg"
+[[ -e "$HOME/.config/hypr/wallpaper.current" ]] && WALL="$(readlink -f "$HOME/.config/hypr/wallpaper.current")"
+
+sudo mkdir -p /usr/share/sddm/themes /etc/sddm.conf.d
+sudo rm -rf /usr/share/sddm/themes/minimal-sddm
+sudo cp -r "$DOTFILES_DIR/setup/minimal-sddm" /usr/share/sddm/themes/minimal-sddm
+sudo cp "$WALL" /usr/share/sddm/themes/minimal-sddm/wallpaper.jpg
+sudo cp "$DOTFILES_DIR/setup/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
+echo "SDDM theme installed to /usr/share/sddm/themes/minimal-sddm (wallpaper: $WALL)"
