@@ -211,8 +211,9 @@ DEV_PKGS=(
   clang cmake zig
   # Lua (also used by the Hyprland config; lua-language-server for editor completion)
   lua luarocks lua-language-server stylua
-  # Containers & git tooling
-  docker docker-compose lazydocker git-delta direnv
+  # Containers (docker 29 has no legacy builder: `docker build` needs buildx;
+  # docker-compose provides the `docker compose` plugin) & git tooling
+  docker docker-compose docker-buildx lazydocker git-delta direnv
   # Shell / misc language tooling
   shellcheck shfmt
 )
@@ -450,9 +451,10 @@ if [[ $P_SVC -eq 1 ]]; then
   sudo systemctl enable sddm.service >>"$INSTLOG" 2>&1 && ok "sddm enabled"
   sudo systemctl enable --now power-profiles-daemon.service >>"$INSTLOG" 2>&1 && ok "power-profiles-daemon enabled (waybar power profile switcher)"
   if [[ $P_DEV -eq 1 ]] && command -v docker >/dev/null; then
-    sudo systemctl enable docker.socket >>"$INSTLOG" 2>&1 && ok "docker enabled (socket-activated)"
+    # socket-activated: the daemon starts on the first `docker …` and stays off otherwise
+    sudo systemctl enable --now docker.socket >>"$INSTLOG" 2>&1 && ok "docker enabled (socket-activated, ready now)"
     if ! id -nG "$USER" | grep -qw docker; then
-      sudo usermod -aG docker "$USER" && ok "Added $USER to the docker group (re-login to use docker without sudo)"
+      sudo usermod -aG docker "$USER" && ok "Added $USER to the docker group (takes effect at the next login; \`newgrp docker\` for this shell)"
     fi
   fi
 else

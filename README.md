@@ -254,3 +254,7 @@ can install packages unattended — delete that file to revoke it.
 - tmux installs its plugins (tpm, Catppuccin bar, sessionx, floax, thumbs, …)
   by itself — during setup and again on any start where something is missing
 - `claude` once to log in
+- Docker is socket-activated and you are in the `docker` group after setup;
+  log in again once (or `newgrp docker`) before the first `docker compose up`.
+  If docker was installed later or services were skipped:
+  `sudo systemctl enable --now docker.socket && sudo usermod -aG docker $USER`
