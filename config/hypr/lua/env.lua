@@ -30,7 +30,7 @@ hl.env("VISUAL", "nvim")
 -- Idempotent: hl.env runs again on every config reload.
 local home = os.getenv("HOME")
 local path = os.getenv("PATH") or "/usr/local/bin:/usr/bin"
-local extra = { home .. "/.local/bin", home .. "/.cargo/bin", home .. "/go/bin", home .. "/.bun/bin", home .. "/.local/share/pnpm" }
+local extra = { home .. "/.local/bin", home .. "/.cargo/bin", home .. "/go/bin", home .. "/.bun/bin", home .. "/.local/share/pnpm/bin", home .. "/.local/share/pnpm" }
 for i = #extra, 1, -1 do
     local dir = extra[i]
     if not (":" .. path .. ":"):find(":" .. dir .. ":", 1, true) then

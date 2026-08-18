@@ -12,7 +12,7 @@ export MANPAGER="sh -c 'col -bx | bat -l man -p'"   # colourful man pages
 export GOPATH="$HOME/go"
 export BUN_INSTALL="$HOME/.bun"
 export PNPM_HOME="$HOME/.local/share/pnpm"
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$GOPATH/bin:$BUN_INSTALL/bin:$PNPM_HOME:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$GOPATH/bin:$BUN_INSTALL/bin:$PNPM_HOME/bin:$PNPM_HOME:$PATH"
 
 # ---- history ---------------------------------------------------
 HISTSIZE=100000
