@@ -312,17 +312,6 @@ else
 fi
 
 # ------------------------------------------------------------
-# Tmux plugin manager
-# ------------------------------------------------------------
-section "Tmux plugins"
-if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
-  git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm" >>"$INSTLOG" 2>&1
-  ok "tpm installed (plugins install on first tmux start, or prefix + I)"
-else
-  ok "tpm already installed"
-fi
-
-# ------------------------------------------------------------
 # Config files
 # ------------------------------------------------------------
 # Backs up anything already at $2, then symlinks (or copies) $1 there.
@@ -424,6 +413,19 @@ else
 fi
 
 # ------------------------------------------------------------
+# Tmux plugins (needs ~/.config/tmux linked above)
+# ------------------------------------------------------------
+section "Tmux plugins"
+# tpm + every @plugin from config/tmux/tmux.conf + the tmux-thumbs binary,
+# headless, so the styled status bar works on the very first `tmux`
+# (tmux.conf runs the same script itself if anything is missing).
+if [[ -x "$HOME/.config/tmux/scripts/bootstrap" ]] && "$HOME/.config/tmux/scripts/bootstrap" >>"$INSTLOG" 2>&1; then
+  ok "tmux plugins installed"
+else
+  warn "tmux plugin bootstrap failed (see $INSTLOG) — run ~/.config/tmux/scripts/bootstrap later"
+fi
+
+# ------------------------------------------------------------
 # System services
 # ------------------------------------------------------------
 section "System services"
@@ -502,7 +504,6 @@ if [[ $SYNC_MODE -eq 0 ]]; then
   echo "   • SUPER+/ shows every keybind; SUPER+Space is the launcher"
   echo "   • Adjust ~/.config/hypr/monitors.lua for your displays"
   echo "   • First nvim start installs plugins & language servers automatically"
-  echo "   • In tmux, press ctrl-a + I once to install tmux plugins"
   [[ $P_AI -eq 1 ]] && echo "   • Run 'claude' once to log in; T3 Code is in the launcher"
   echo
   [[ -d "$BACKUP_DIR" ]] && echo "  Your previous configs were backed up to: $BACKUP_DIR"

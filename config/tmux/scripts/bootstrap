@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# One-shot, idempotent tmux plugin bootstrap — makes a fresh machine's tmux look
+# and behave exactly like this one without pressing prefix + I:
+#   1. clone tpm into ~/.config/tmux/plugins/tpm if missing
+#   2. install every `@plugin` from tmux.conf that is missing (tpm, headless)
+#   3. tmux-thumbs ships as source; drop in the prebuilt binary so it does not
+#      open its interactive "compile or download?" pane on first use
+# Called by tmux.conf on server start (only when something is missing) and by
+# setup/arch.sh. Safe to run any time: `~/.config/tmux/scripts/bootstrap`.
+set -euo pipefail
+
+PLUGINS="${TMUX_PLUGIN_MANAGER_PATH:-$HOME/.config/tmux/plugins/}"
+PLUGINS="${PLUGINS%/}"
+export TMUX_PLUGIN_MANAGER_PATH="$PLUGINS/"
+
+if [[ ! -d "$PLUGINS/tpm" ]]; then
+  git clone --depth 1 https://github.com/tmux-plugins/tpm "$PLUGINS/tpm"
+fi
+
+# tpm reads the @plugin list from tmux.conf; installs only what is missing.
+"$PLUGINS/tpm/bin/install_plugins"
+
+thumbs="$PLUGINS/tmux-thumbs"
+if [[ -d "$thumbs" && ! -x "$thumbs/target/release/thumbs" ]]; then
+  platform="$(uname -s)_$(uname -m)"
+  if [[ "$platform" == "Linux_x86_64" ]]; then
+    url=$(curl -fsSL "https://api.github.com/repos/fcsonline/tmux-thumbs/releases/latest" \
+          | grep -o 'https://[^"]*linux-musl.tar.gz' | head -1)
+    if [[ -n "$url" ]]; then
+      mkdir -p "$thumbs/target/release"
+      curl -fsSL "$url" | tar -xzf - -C "$thumbs/target/release" thumbs tmux-thumbs
+      chmod +x "$thumbs/target/release/thumbs" "$thumbs/target/release/tmux-thumbs"
+      echo "tmux-thumbs: prebuilt binary installed"
+    fi
+  elif command -v cargo >/dev/null; then
+    (cd "$thumbs" && cargo build --release --target-dir=target)
+  else
+    echo "tmux-thumbs: no prebuilt binary for $platform and no cargo — it will ask on first use" >&2
+  fi
+fi
