@@ -4,6 +4,13 @@ Arch Linux + Hyprland, themed with Catppuccin Mocha end to end — a keyboard-fi
 desktop tuned for development and for working alongside AI coding agents
 (Claude Code, T3 Code).
 
+![Hyprland desktop: waybar islands, kitty with fastfetch, Neovim](docs/desktop.png)
+
+Lost? **`SUPER + /`** (or the 󰌌 button in the bar) opens the keybind cheatsheet —
+every shortcut, grouped and searchable, rendered live from `hyprctl binds`:
+
+![Keybind cheatsheet overlay](docs/keybinds.png)
+
 - **Hyprland** with the new **Lua config** (`hyprland.lua`, Hyprland ≥ 0.55) split
   into small modules — the old `.conf` format is gone
 - **waybar** floating islands (workspaces, window title, clock/weather/media,
@@ -13,7 +20,8 @@ desktop tuned for development and for working alongside AI coding agents
   brightness overlay · **hyprlock** HUD-style lock screen with a "hacker mode"
   on wrong passwords (`scripts/lock-fx`) · **hypridle**
   · **hyprsunset** night light · **hyprpolkitagent** · **hyprshutdown**
-- **kitty**, **zsh** + starship, **tmux**, **Neovim** (submodule)
+- **kitty**, **zsh** + starship, **tmux** (`prefix + ?` = the same cheatsheet
+  overlay for tmux keys), **Neovim** (submodule)
 - GTK (adw-gtk3-dark + Papirus) and Qt (qt6ct, Catppuccin palette) themed alike
 
 ## Install
@@ -39,22 +47,27 @@ The script clones this repo to `~/dotfiles` if it isn't there already, then:
 3. (optional) AI tools: **Claude Code** (official installer), **T3 Code**
    (AUR), GitHub CLI, and desktop-notification hooks for Claude Code
 4. Sets up zsh + oh-my-zsh + autosuggestions/syntax-highlighting, makes zsh the
-   login shell; installs tpm (tmux plugin manager)
+   login shell
 5. Symlinks all configs into place (`--copy` for independent copies), backing
    up anything that was already there to `~/.dotfiles-backup/<timestamp>/`;
    links `bin/*` into `~/.local/bin`
 6. Generates the machine-local files: `~/.config/hypr/monitors.lua`
-   (gitignored), the wallpaper symlink, the Qt theme configs
+   (gitignored), the wallpaper symlink, the Qt theme configs; installs the
+   tmux plugins headlessly (`config/tmux/scripts/bootstrap`)
 7. Enables NetworkManager (and makes it the *only* network manager — see
    `setup/fix-network`), bluetooth, sddm, power-profiles-daemon, docker
 8. Installs the minimal-sddm login theme (frosted glass on the sunset-tree
-   artwork; the desktop wallpaper is copied in as an alternative)
+   artwork; the desktop wallpaper is dropped in as an alternative). Symlinked
+   from `setup/minimal-sddm` like the rest of the configs, so theme edits go
+   live at the next login (`--copy` copies it instead)
 9. (optional) Enables the automatic sync timer
 
 Flags: `-y`/`--yes` for fully unattended, `--copy` to copy instead of symlink.
 
 Reboot when it finishes and log in to Hyprland from sddm.
-Press `SUPER + /` at any time for the searchable keybind cheatsheet.
+Press `SUPER + /` (or click 󰌌 in the bar) at any time for the keybind
+cheatsheet — a searchable overlay grouped into cards, rendered live from
+`hyprctl binds`, so it always matches what is actually bound.
 
 ## Keybinds (Hyprland)
 
@@ -134,9 +147,17 @@ password, caps lock is called out, and everything is reachable with Tab. A
 wrong password turns the pill red, shakes it, flashes the screen briefly and
 shows "Wrong password · attempt n"; while PAM checks an arc spins around the
 avatar. Popups and the help sheet are light cards. Colours, fonts, blur, pill
-size and the background are in `theme.conf` (`install-sddm-theme` also copies
+size and the background are in `theme.conf` (`install-sddm-theme` also drops
 the desktop wallpaper in as `wallpaper.jpg`; set `background=wallpaper.jpg` to
-use it). Preview without logging out:
+use it). `/usr/share/sddm/themes/minimal-sddm` is a symlink into the repo, so
+edits apply at the next login — the only trick is that the greeter runs as the
+`sddm` user, which is given traverse-only (`--x`) access to `~` and read
+access (`r-x`) to the theme dir via ACLs so it can follow the link (`getfacl ~`
+shows it; nothing else is opened up). Qt ≥ 6.11 lists the directory to check
+a QML file exists, so traverse-only on the theme dir itself yields a bogus
+`Main.qml: File name case mismatch` and the greeter falls back to its
+built-in theme.
+Preview without logging out:
 `sddm-greeter-qt6 --test-mode --theme setup/minimal-sddm` (in test mode the
 password `sddm` succeeds, anything else fails).
 
@@ -152,7 +173,7 @@ password `sddm` succeeds, anything else fails).
 | `look.lua` | gaps, borders, rounding, blur, shadows, animations, layouts |
 | `input.lua` | keyboard, touchpad, gestures |
 | `rules.lua` | window / layer / workspace rules (scratchpads live here) |
-| `binds.lua` | keybinds — `bind(keys, dispatcher, "description")` |
+| `binds.lua` | keybinds — `group("Section")` then `bind(keys, dispatcher, "description")`; the cheatsheet reads both |
 | `autostart.lua` | programs started with the session |
 | `monitors.lua` | *machine-local*, gitignored — see `monitors.lua.example` |
 | `local.lua` | *optional, gitignored* — machine-specific overrides |
@@ -163,6 +184,10 @@ at the shipped API stubs, so Neovim (lua_ls) completes `hl.*`.
 `hyprctl repl` is a live Lua REPL into the compositor.
 
 ## Working with agents
+
+`AGENTS.md` (`CLAUDE.md` is a symlink to it) holds the rules for anyone —
+human or agent — changing this repo: every installed package goes into
+`setup/arch.sh`, every config into `config/`, so any machine can be rebuilt.
 
 - **Claude Code** — installed by setup; `~/.claude/settings.json` gets hooks that
   send a desktop notification when Claude needs input or finishes while you're
@@ -183,21 +208,22 @@ config/           → symlinked into ~/.config/
                   screenshot, record, nightlight, lockinfo)
   waybar/         bar config, style, scripts (weather, updates)
   rofi/           launcher config + theme, scripts/ (powermenu, clipboard,
-                  keybinds, wallpaper)
+                  wallpaper)
   swaync/         notification center config + style
   swayosd/        OSD config + style
+  fastfetch/      system summary shown in new kitty windows (`ff`; `repo` = onefetch)
   kitty/          kitty + Catppuccin Mocha
   qt6ct/ qt5ct/   Qt theme (palette + generated .conf)
   gtk-3.0/4.0/    dark GTK theme (adw-gtk3-dark + Papirus icons)
   nvim/           Neovim (git submodule → meszmate/nvim)
-  tmux/           tmux + tpm plugins
+  tmux/           tmux, self-installing tpm plugins (scripts/bootstrap)
   starship.toml   prompt
 home/             → symlinked into ~/ (.zshrc, ...)
-bin/              → symlinked into ~/.local/bin (claude-notify)
+bin/              → symlinked into ~/.local/bin (keybinds overlay, claude-notify)
 setup/
   arch.sh              the installer
   fix-network          make NetworkManager the only network manager
-  install-sddm-theme   (re)install the login theme (copies the wallpaper in too)
+  install-sddm-theme   (re)link the login theme + sddm.conf.d (drops the wallpaper in too)
   claude-hooks-install add the Claude Code notification hooks
   minimal-sddm/        sddm login theme (Qt6 QML, frosted glass on tree.png)
 ```
@@ -221,9 +247,10 @@ can install packages unattended — delete that file to revoke it.
 - Edit `~/.config/hypr/monitors.lua` for your monitor layout
   ([wiki](https://wiki.hypr.land/Configuring/Basics/Monitors/))
 - Put wallpapers in `~/Pictures/Wallpapers` and pick one with `SUPER + SHIFT + W`;
-  `setup/install-sddm-theme` copies it into the login theme too (see `theme.conf`)
+  `setup/install-sddm-theme` drops it into the login theme too (see `theme.conf`)
 - Weather: metric by default; set `WEATHER_UNIT=F` / `WEATHER_LOCATION=...` in
   the waybar `custom/weather` exec line to change
 - First `nvim` start installs all plugins and language servers automatically
-- In tmux, `ctrl-a + I` installs the tmux plugins once
+- tmux installs its plugins (tpm, Catppuccin bar, sessionx, floax, thumbs, …)
+  by itself — during setup and again on any start where something is missing
 - `claude` once to log in
