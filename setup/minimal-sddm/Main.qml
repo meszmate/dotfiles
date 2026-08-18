@@ -133,7 +133,8 @@ Rectangle {
         property variant geometry: screenModel.geometry(screenModel.primary)
         x: geometry.x; y: geometry.y; width: geometry.width; height: geometry.height
 
-        Shortcut { sequences: ["F1"];                       onActivated: help.visible = !help.visible }
+        // "Volume Mute" too: laptops whose F-row defaults to media keys send that for F1
+        Shortcut { sequences: ["F1", "Ctrl+/", "Volume Mute"]; onActivated: help.visible = !help.visible }
         Shortcut { sequences: ["F2", "Alt+U"];              onActivated: nextUser(1) }
         Shortcut { sequences: ["Shift+F2", "Alt+Ctrl+U"];   onActivated: nextUser(-1) }
         Shortcut { sequences: ["F3", "Alt+S"];              onActivated: nextSession(1) }
@@ -538,7 +539,7 @@ Rectangle {
                     spacing: 32
                     property var rows: [
                         ["Keys", ""],
-                        ["F1",                "this help"],
+                        ["F1 / Ctrl+/",       "this help   (Fn+F1 if the F-row is in media mode)"],
                         ["F2 / Shift+F2",     "next / previous user   (↑ ↓ in the password field)"],
                         ["F3 / Shift+F3",     "next / previous session"],
                         ["F4",                "next keyboard layout"],
