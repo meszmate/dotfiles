@@ -34,6 +34,8 @@ alias dots='cd ~/dotfiles'
 alias hyprcfg='nvim ~/.config/hypr/hyprland.lua'
 alias hyprlog='hyprctl rollinglog -f'
 alias keys='keybinds'          # keybind cheatsheet overlay (SUPER+/); `keys tmux` for tmux
+alias ff='fastfetch'
+alias repo='onefetch'          # git repo summary
 
 # AI agents
 alias cc='claude'
@@ -46,6 +48,12 @@ command -v zoxide >/dev/null && eval "$(zoxide init zsh --cmd cd)"
 command -v fzf    >/dev/null && source <(fzf --zsh)
 command -v direnv >/dev/null && eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
+
+# system summary on a fresh kitty window (not tmux, nested shells or agents)
+if [[ -o interactive && $SHLVL -eq 1 && -z $TMUX && $TERM == xterm-kitty && -z $CLAUDECODE ]] \
+   && command -v fastfetch >/dev/null; then
+    fastfetch
+fi
 
 # bun / pnpm completions when present
 [[ -s "$BUN_INSTALL/_bun" ]] && source "$BUN_INSTALL/_bun"

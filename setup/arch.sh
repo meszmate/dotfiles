@@ -183,6 +183,8 @@ CORE_PKGS=(
   man-db unzip wget
   # Neovim + what nvim-treesitter (main) needs to build parsers (gcc comes with base-devel)
   neovim tree-sitter-cli
+  # System / repo info at a glance (config/fastfetch; onefetch = fastfetch for git repos)
+  fastfetch onefetch
   # Audio
   pipewire pipewire-alsa pipewire-pulse wireplumber pamixer pavucontrol playerctl
   # Network
