@@ -20,7 +20,7 @@ return {
     emoji       = "rofi -show emoji -modi emoji",
     clipboard   = rofi .. "/clipboard",
     powermenu   = rofi .. "/powermenu",
-    cheatsheet  = rofi .. "/keybinds",
+    cheatsheet  = home .. "/.local/bin/keybinds",   -- GTK overlay (SUPER+/, waybar 󰌌; bin/keybinds)
     wallpapers  = rofi .. "/wallpaper",
 
     -- helpers shipped in config/hypr/scripts/

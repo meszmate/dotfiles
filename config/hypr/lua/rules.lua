@@ -34,6 +34,7 @@ hl.window_rule({ name = "idle-inhibit-fullscreen", match = { class = ".*" }, idl
 -- Layer rules (bars, menus, notifications) -----------------------------------
 hl.layer_rule({ match = { namespace = "^(waybar)$" },                       blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "^(rofi)$" },                         blur = true, ignore_alpha = 0.3, animation = "popin 90%" })
+hl.layer_rule({ match = { namespace = "^(keybinds)$" },                     blur = true, ignore_alpha = 0.3, animation = "popin 92%" })   -- bin/keybinds
 hl.layer_rule({ match = { namespace = "^(swaync-control-center)$" },        blur = true, ignore_alpha = 0.3, animation = "slide" })
 hl.layer_rule({ match = { namespace = "^(swaync-notification-window)$" },   blur = true, ignore_alpha = 0.3, animation = "slide" })
 hl.layer_rule({ match = { namespace = "^(swayosd)$" },                      blur = true, ignore_alpha = 0.3, animation = "fade" })

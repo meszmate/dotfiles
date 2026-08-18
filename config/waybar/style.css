@@ -64,6 +64,7 @@ tooltip label {
 
 /* ---- every module gets the same pill spacing ----------------------------- */
 #custom-launcher,
+#custom-keybinds,
 #custom-tools,
 #workspaces,
 #submap,
@@ -96,6 +97,7 @@ tooltip label {
 }
 
 #custom-launcher:hover,
+#custom-keybinds:hover,
 #custom-tools:hover,
 #custom-weather:hover,
 #clock:hover,
@@ -123,6 +125,12 @@ tooltip label {
     color: @blue;
     font-size: 17px;
     padding: 0 10px 0 8px;
+}
+
+#custom-keybinds {
+    color: @mauve;
+    font-size: 15px;
+    padding: 0 8px;
 }
 
 #workspaces {

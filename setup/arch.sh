@@ -174,6 +174,8 @@ CORE_PKGS=(
   xdg-desktop-portal-hyprland xdg-desktop-portal-gtk qt5-wayland qt6-wayland
   # Desktop shell: bar, launcher, notifications, OSD
   waybar rofi rofi-calc rofi-emoji swaync swayosd libnotify
+  # Keybind cheatsheet overlay (bin/keybinds: GTK4 + layer-shell)
+  gtk4 gtk4-layer-shell python-gobject
   # Screenshots, recording, clipboard
   grim slurp swappy wf-recorder wl-clipboard cliphist wl-clip-persist
   # Terminal, shell & CLI tools

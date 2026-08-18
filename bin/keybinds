@@ -1,0 +1,583 @@
+#!/usr/bin/env python3
+"""Keybind cheatsheet overlay — Hyprland (SUPER+/, waybar 󰌌) and tmux (prefix + ?).
+
+    keybinds [hyprland]     Hyprland binds, live from `hyprctl binds -j`
+    keybinds tmux           tmux binds, live from `tmux list-keys -N`
+    keybinds … --text       plain ANSI table instead of the overlay (used for the
+                            tmux popup over SSH / on a TTY, or just `keybinds tmux --text`)
+
+Calling it again while the overlay is open closes it (toggle). Esc / click
+outside close it, typing searches.
+
+Both sources use the same convention: every bind's description / note is
+"Section · What it does" — the section becomes a card, the rest a row. Related
+binds fold into one row (H J K L + arrows, 1 … 0, Play / Pause), and tmux
+plugin binds (sessionx, floax, thumbs, fzf-url, …) are recognised by their
+scripts.
+
+Overlay needs gtk4, gtk4-layer-shell, python-gobject (setup/arch.sh).
+gtk4-layer-shell must be loaded before GTK opens the Wayland connection, hence
+the LD_PRELOAD re-exec.
+"""
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+FLAGS = {a for a in sys.argv[1:] if a.startswith("--")}
+MODE = ARGS[0] if ARGS else "hyprland"
+if MODE not in ("hyprland", "tmux"):
+    sys.exit(f"usage: keybinds [hyprland|tmux] [--text]   (got {MODE!r})")
+TEXT = "--text" in FLAGS or not os.environ.get("WAYLAND_DISPLAY")
+
+LAYER_LIB = "/usr/lib/libgtk4-layer-shell.so"
+if not TEXT and LAYER_LIB not in os.environ.get("LD_PRELOAD", "") and os.path.exists(LAYER_LIB):
+    os.environ["LD_PRELOAD"] = LAYER_LIB
+    os.execv(sys.executable, [sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
+
+PIDFILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "keybinds-overlay.pid")
+
+# ── data ─────────────────────────────────────────────────────────────────────
+DIGITS = [str(i) for i in range(1, 10)] + ["0"]
+VIM = ["H", "J", "K", "L"]
+ARROWS = ["←", "↓", "↑", "→"]
+DIRECTION_RE = re.compile(r"\s+(left|right|up|down)$", re.I)
+NUMBER_RE = re.compile(r"\b(\d+)\b")
+
+SECTION_ICONS = {
+    "apps": "󰀻", "menu": "󰀻", "session": "󰍃", "notif": "󰂚", "capture": "󰄀", "screenshot": "󰄀",
+    "window": "󰖯", "focus": "󰁁", "resize": "󰩨", "monitor": "󰍹", "mouse": "󰍽", "workspace": "󱂬",
+    "scratch": "󰆍", "bar": "󰃟", "display": "󰃟", "hardware": "󰌌", "media": "󰎆",
+    "pane": "󰯌", "copy": "󰆏", "plugin": "󰏓", "misc": "󰒓", "help": "󰋖",
+}
+
+
+def section_icon(name):
+    n = name.lower()
+    for needle, glyph in SECTION_ICONS.items():
+        if needle in n:
+            return glyph
+    return "󰘳"
+
+
+def fold_keys(keys):
+    """Replace complete families with one keycap: 1 … 0, H J K L, ← ↓ ↑ →."""
+    out, keys = [], list(keys)
+    for family, label in ((DIGITS, "1 … 0"), (DIGITS[:9], "1 … 9"), (VIM, "H J K L"),
+                          ([k.lower() for k in VIM], "h j k l"), (ARROWS, "← ↓ ↑ →")):
+        if all(k in keys for k in family):
+            keys = [k for k in keys if k not in family]
+            out.append(label)
+    return keys + out if out and keys else out or keys
+
+
+class Collector:
+    """Groups (section, mods, description) → keys, folding families, keeping order."""
+
+    def __init__(self):
+        self.groups, self.order = {}, []
+
+    def add(self, section, text, mods, key):
+        numbers = []
+        template = DIRECTION_RE.sub("", text) if key in VIM + [k.lower() for k in VIM] + ARROWS else text
+        if key in DIGITS:
+            m = NUMBER_RE.search(template)
+            if m:
+                numbers.append(int(m.group(1)))
+                template = template[:m.start()] + "#" + template[m.end():]
+        gkey = (section, tuple(mods), template)
+        if gkey not in self.groups:
+            self.groups[gkey] = {"mods": mods, "keys": [], "numbers": [], "template": template}
+            self.order.append(gkey)
+        g = self.groups[gkey]
+        if key not in g["keys"]:
+            g["keys"].append(key)
+        g["numbers"] += numbers
+
+    def sections(self):
+        sections, index = [], {}
+        for gkey in self.order:
+            section, g = gkey[0], self.groups[gkey]
+            desc = g["template"]
+            if "#" in desc:
+                desc = desc.replace("#", f"{min(g['numbers'])}–{max(g['numbers'])}" if g["numbers"] else "n")
+            if section not in index:
+                index[section] = len(sections)
+                sections.append((section, []))
+            sections[index[section]][1].append({"mods": g["mods"], "keys": fold_keys(g["keys"]), "desc": desc})
+        return sections
+
+
+# ── Hyprland source ──────────────────────────────────────────────────────────
+HYPR_MODS = [(64, "Super", "super"), (4, "Ctrl", "ctrl"), (8, "Alt", "alt"), (1, "Shift", "shift")]
+HYPR_KEYS = {
+    "return": "Enter", "space": "Space", "tab": "Tab", "escape": "Esc", "print": "PrtSc",
+    "backspace": "⌫", "delete": "Del", "insert": "Ins", "home": "Home", "end": "End",
+    "prior": "PgUp", "next": "PgDn",
+    "comma": ",", "period": ".", "slash": "/", "backslash": "\\", "equal": "=", "minus": "−",
+    "grave": "`", "bracketleft": "[", "bracketright": "]", "semicolon": ";", "apostrophe": "'",
+    "left": "←", "right": "→", "up": "↑", "down": "↓",
+    "mouse:272": "󰍽 Left drag", "mouse:273": "󰍽 Right drag", "mouse:274": "󰍽 Middle",
+    "mouse_down": "󰍽 Scroll ↓", "mouse_up": "󰍽 Scroll ↑",
+    "xf86audioraisevolume": "󰝝 Vol +", "xf86audiolowervolume": "󰝞 Vol −", "xf86audiomute": "󰝟 Mute",
+    "xf86audiomicmute": "󰍭 Mic mute", "xf86monbrightnessup": "󰃠 Bright +", "xf86monbrightnessdown": "󰃞 Bright −",
+    "xf86audioplay": "󰐊 Play", "xf86audiopause": "󰏤 Pause", "xf86audionext": "󰒭 Next", "xf86audioprev": "󰒮 Prev",
+    "xf86poweroff": "⏻ Power", "xf86sleep": "󰒲 Sleep",
+}
+
+
+def hypr_key(key):
+    k = key.lower()
+    if k in HYPR_KEYS:
+        return HYPR_KEYS[k]
+    if k.startswith("code:"):
+        return "key " + k[5:]
+    return key.upper() if len(key) == 1 else key[0].upper() + key[1:]
+
+
+def load_hyprland():
+    raw = json.loads(subprocess.run(["hyprctl", "binds", "-j"], capture_output=True, text=True).stdout or "[]")
+    c = Collector()
+    for b in raw:
+        desc = (b.get("description") or "").strip()
+        if not desc or b.get("submap"):
+            continue
+        section, sep, text = desc.partition(" · ")
+        if not sep:
+            section, text = "Other", desc
+        mods = [(label, cls) for bit, label, cls in HYPR_MODS if b["modmask"] & bit]
+        c.add(section, text, mods, hypr_key(b["key"]))
+    return {
+        "title": "Keybinds", "icon": "󰌌", "source": "live from hyprctl",
+        "toggle": [("Super", "super"), "+", ("/", None)], "sections": c.sections(),
+    }
+
+
+# ── tmux source ──────────────────────────────────────────────────────────────
+TMUX_KEYS = {
+    "space": "Space", "enter": "Enter", "escape": "Esc", "tab": "Tab", "btab": "⇧Tab", "bspace": "⌫",
+    "dc": "Del", "ic": "Ins", "home": "Home", "end": "End", "ppage": "PgUp", "npage": "PgDn",
+    "left": "←", "right": "→", "up": "↑", "down": "↓", "\\;": ";",
+}
+# plugin binds carry no note — recognise them by the script they run
+TMUX_PLUGINS = [
+    ("tmux-sessionx", "Sessions · Session picker (sessionx)"),
+    ("floax/scripts/menu", "Popups · Floax menu"),
+    ("tmux-floax", "Popups · Floating terminal (floax)"),
+    ("tmux-thumbs", "Copy & paste · Pick text on screen (thumbs)"),
+    ("tmux-fzf-url", "Copy & paste · Open a URL from the screen"),
+    ("tmux-fzf/main", "Misc · fzf command menu"),
+    ("copy_line", "Copy & paste · Copy current line"),
+    ("copy_pane_pwd", "Copy & paste · Copy pane's directory"),
+    ("resurrect/scripts/save", "Sessions · Save sessions (resurrect)"),
+    ("resurrect/scripts/restore", "Sessions · Restore sessions (resurrect)"),
+    ("tpm/bindings/install_plugins", "Plugins · Install plugins"),
+    ("tpm/bindings/update_plugins", "Plugins · Update plugins"),
+    ("tpm/bindings/clean_plugins", "Plugins · Remove unused plugins"),
+]
+
+
+TMUX_SECTIONS = ["Sessions", "Windows", "Panes", "Copy & paste", "Popups", "Plugins", "Misc", "Help"]
+
+
+def tmux_key(key):
+    """'C-x' → ([('Ctrl','ctrl')], 'X'), 'M-Up' → ([('Alt','alt')], '↑'), '"' → ([], '"')."""
+    mods = []
+    while len(key) > 2 and key[1] == "-" and key[0] in "CMS":
+        mods.append({"C": ("Ctrl", "ctrl"), "M": ("Alt", "alt"), "S": ("Shift", "shift")}[key[0]])
+        key = key[2:]
+    return mods, TMUX_KEYS.get(key.lower(), key)   # tmux keys are case-sensitive: h ≠ H
+
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True).stdout
+
+
+def load_tmux():
+    prefix = (tmux("show", "-gv", "prefix").strip() or "C-b")
+    pmods, pkey = tmux_key(prefix)
+    prefix_caps = [("+".join([m[0] for m in pmods] + [pkey.upper()]), "super")]   # one keycap: Ctrl+A
+    c = Collector()
+    seen = set()
+    for table in ("prefix", "root", "copy-mode-vi"):
+        for line in tmux("list-keys", "-aN", "-T", table).splitlines():
+            parts = line.split(None, 2)
+            if len(parts) == 3 and parts[0] == prefix:
+                parts = parts[1:]
+            if len(parts) < 2 or " · " not in parts[-1]:
+                continue
+            key, note = parts[0], parts[-1].strip()
+            section, _, text = note.partition(" · ")
+            mods, label = tmux_key(key)
+            base = prefix_caps if table == "prefix" else []
+            if table == "copy-mode-vi":
+                text += "  (in copy mode)"
+            c.add(section, text, base + mods, label)
+            seen.add((table, key))
+        # plugin binds: no note, match the script path
+        for line in tmux("list-keys", "-T", table).splitlines():
+            m = re.match(r"bind-key\s+(?:-r\s+)?-T\s+(\S+)\s+(\S+)\s+(.*)$", line)
+            if not m or (table, m.group(2)) in seen:
+                continue
+            cmd = m.group(3)
+            for needle, note in TMUX_PLUGINS:
+                if needle in cmd:
+                    section, _, text = note.partition(" · ")
+                    mods, label = tmux_key(m.group(2))
+                    c.add(section, text, (prefix_caps if table == "prefix" else []) + mods, label)
+                    break
+    sections = c.sections()
+    sections.sort(key=lambda sec: next((i for i, n in enumerate(TMUX_SECTIONS) if n == sec[0]), len(TMUX_SECTIONS)))
+    return {
+        "title": "tmux keybinds", "icon": "󰆍", "source": f"prefix {prefix_caps[0][0]}  ·  live from tmux",
+        "toggle": prefix_caps + ["+", ("?", None)], "sections": sections,
+    }
+
+
+def load():
+    return load_tmux() if MODE == "tmux" else load_hyprland()
+
+
+# ── text renderer (popup / ssh / tty) ────────────────────────────────────────
+def render_text(data):
+    A = {"super": "\033[38;2;203;166;247m", "ctrl": "\033[38;2;250;179;135m", "alt": "\033[38;2;166;227;161m",
+         "shift": "\033[38;2;137;180;250m", None: "\033[38;2;205;214;244m"}
+    dim, bold, off, key_bg = "\033[38;2;108;112;134m", "\033[1m", "\033[0m", "\033[48;2;69;71;90m"
+    total = sum(len(r) for _, r in data["sections"])
+    out = [f"{bold}{data['icon']}  {data['title']}{off}  {dim}{total} shortcuts · {data['source']}{off}", ""]
+    for name, rows in data["sections"]:
+        out.append(f"{A['super']}{section_icon(name)}  {bold}{name.upper()}{off}")
+        for r in rows:
+            caps = [f"{key_bg}{A[cls]} {lbl} {off}" for lbl, cls in r["mods"]]
+            plain = " + ".join(f" {lbl} " for lbl, _ in r["mods"])
+            keys = f" {dim}/{off} ".join(f"{key_bg}{A[None]} {k} {off}" for k in r["keys"])
+            plain_keys = " / ".join(f" {k} " for k in r["keys"])
+            left = f" {dim}+{off} ".join(caps + [keys]) if caps else keys
+            width = len(" + ".join(filter(None, [plain, plain_keys])))
+            out.append(f"  {left}{' ' * max(1, 34 - width)}{r['desc']}")
+        out.append("")
+    return "\n".join(out)
+
+
+def toggle_running():
+    """If an overlay is already up, close it; True if it was the same mode."""
+    try:
+        with open(PIDFILE) as f:
+            pid, mode = f.read().split()
+        pid = int(pid)
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            if b"keybinds" in f.read():
+                os.kill(pid, signal.SIGTERM)
+                os.unlink(PIDFILE)
+                return mode == MODE
+    except (OSError, ValueError):
+        pass
+    return False
+
+
+if TEXT:
+    text = render_text(load())
+    if os.environ.get("TMUX") and MODE == "tmux" and "--text" not in FLAGS and shutil.which("tmux"):
+        # not on Wayland (ssh / tty) but inside tmux: show it in a popup
+        subprocess.run(["tmux", "display-popup", "-E", "-w", "92%", "-h", "90%", "-b", "rounded",
+                        f"{sys.executable} {os.path.abspath(__file__)} tmux --text | less -R"])
+    else:
+        print(text)
+    sys.exit(0)
+
+# ── overlay ──────────────────────────────────────────────────────────────────
+import gi  # noqa: E402
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+from gi.repository import Gdk, Gtk, Gtk4LayerShell as LS  # noqa: E402
+
+CSS = """
+@define-color base     #1e1e2e; @define-color mantle   #181825; @define-color crust    #11111b;
+@define-color surface0 #313244; @define-color surface1 #45475a; @define-color surface2 #585b70;
+@define-color overlay0 #6c7086; @define-color overlay1 #7f849c; @define-color subtext0 #a6adc8;
+@define-color subtext1 #bac2de; @define-color text     #cdd6f4; @define-color mauve    #cba6f7;
+@define-color blue     #89b4fa; @define-color lavender #b4befe; @define-color peach    #fab387;
+@define-color green    #a6e3a1; @define-color red      #f38ba8; @define-color teal     #94e2d5;
+
+window, .scrim { background: transparent; }
+.scrim { background: alpha(@crust, 0.28); }
+
+.card {
+    background: alpha(@base, 0.90);
+    border: 1px solid alpha(@surface1, 0.8);
+    border-radius: 20px;
+    box-shadow: 0 24px 60px alpha(@crust, 0.55);
+    padding: 22px 26px 18px 26px;
+    color: @text;
+    font-family: "Inter", sans-serif;
+}
+.title       { font-size: 21px; font-weight: 700; }
+.title-icon  { color: @mauve; font-family: "JetBrainsMono Nerd Font"; font-size: 26px; margin-right: 10px; }
+.subtitle    { color: @overlay1; font-size: 12.5px; margin-left: 12px; }
+
+entry.search {
+    min-height: 34px; min-width: 300px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: alpha(@surface0, 0.9);
+    border: 1px solid alpha(@surface1, 0.9);
+    color: @text; caret-color: @mauve;
+    font-size: 13px;
+}
+entry.search:focus-within { border-color: alpha(@mauve, 0.85); box-shadow: 0 0 0 3px alpha(@mauve, 0.15); }
+entry.search image { color: @overlay1; }
+entry.search placeholder { color: @overlay0; }
+
+.section {
+    background: alpha(@surface0, 0.42);
+    border: 1px solid alpha(@surface1, 0.45);
+    border-radius: 14px;
+    padding: 12px 14px 8px 14px;
+}
+.section-title { font-size: 12.5px; font-weight: 700; letter-spacing: 0.6px; color: @subtext1; }
+.section-icon  { color: @mauve; font-family: "JetBrainsMono Nerd Font"; font-size: 15px; margin-right: 8px; }
+.section-count { color: @overlay0; font-size: 11px; font-family: "JetBrainsMono Nerd Font"; }
+
+.desc { color: @subtext0; font-size: 13px; }
+.row:hover .desc { color: @text; }
+
+.key {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 11px; font-weight: 600;
+    color: @text;
+    background: alpha(@surface1, 0.95);
+    border-radius: 6px;
+    border-bottom: 2px solid alpha(@crust, 0.9);
+    padding: 1px 6px 2px 6px;
+    min-width: 12px;
+}
+.key.super { color: @mauve; background: alpha(@mauve, 0.18); }
+.key.ctrl  { color: @peach; background: alpha(@peach, 0.18); }
+.key.alt   { color: @green; background: alpha(@green, 0.18); }
+.key.shift { color: @blue;  background: alpha(@blue,  0.18); }
+.plus, .or { color: @overlay0; font-family: "JetBrainsMono Nerd Font"; font-size: 10px; margin: 0 3px; }
+.or { margin: 0 5px; }
+
+.footer      { color: @overlay0; font-size: 12px; margin-top: 4px; }
+.footer .key { font-size: 10.5px; padding: 0 6px 1px 6px; }
+.empty       { color: @overlay1; font-size: 15px; margin: 60px 0; }
+scrollbar slider { background: alpha(@surface2, 0.8); border-radius: 8px; min-width: 6px; }
+"""
+
+
+def partition(weights, k):
+    """Split indices 0..n-1 into k contiguous runs minimising the tallest run."""
+    n = len(weights)
+    if n <= k:
+        return [[i] for i in range(n)] + [[] for _ in range(k - n)]
+    prefix = [0]
+    for w in weights:
+        prefix.append(prefix[-1] + w)
+    INF = float("inf")
+    best = [[INF] * (k + 1) for _ in range(n + 1)]
+    cut = [[0] * (k + 1) for _ in range(n + 1)]
+    best[0][0] = 0
+    for j in range(1, k + 1):
+        for i in range(1, n + 1):
+            for p in range(j - 1, i):
+                h = max(best[p][j - 1], prefix[i] - prefix[p])
+                if h < best[i][j]:
+                    best[i][j], cut[i][j] = h, p
+    runs, i = [], n
+    for j in range(k, 0, -1):
+        p = cut[i][j]
+        runs.append(list(range(p, i)))
+        i = p
+    return runs[::-1]
+
+
+def keycap(label, cls=None):
+    lbl = Gtk.Label(label=label)
+    lbl.add_css_class("key")
+    if cls:
+        lbl.add_css_class(cls)
+    return lbl
+
+
+def small(text, cls):
+    lbl = Gtk.Label(label=text)
+    lbl.add_css_class(cls)
+    return lbl
+
+
+class Cheatsheet(Gtk.Application):
+    def __init__(self, data):
+        super().__init__(application_id="dev.meszmate.keybinds", flags=0)
+        self.data = data
+        self.rows = []       # ((keys_widget, desc_widget), haystack, section_widget)
+        self.sections = []   # (section_widget, [row_widgets…])
+
+    def do_activate(self):
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        win = Gtk.ApplicationWindow(application=self)
+        LS.init_for_window(win)
+        LS.set_layer(win, LS.Layer.OVERLAY)
+        LS.set_namespace(win, "keybinds")
+        LS.set_keyboard_mode(win, LS.KeyboardMode.EXCLUSIVE)
+        for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+            LS.set_anchor(win, edge, True)
+        LS.set_exclusive_zone(win, -1)
+
+        mon = Gdk.Display.get_default().get_monitors()[0].get_geometry()
+        total = sum(len(rows) for _, rows in self.data["sections"])
+        columns = 3 if total > 40 else 2
+        card_w = min(1520 if columns == 3 else 1080, int(mon.width * 0.9))
+        max_h = int(mon.height * 0.88)
+
+        overlay = Gtk.Overlay()
+        scrim = Gtk.Box()
+        scrim.add_css_class("scrim")
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_: self.quit())
+        scrim.add_controller(click)
+        overlay.set_child(scrim)
+
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        card.add_css_class("card")
+        card.set_size_request(card_w, -1)
+        overlay.add_overlay(card)
+
+        # header
+        head = Gtk.Box()
+        head.append(small(self.data["icon"], "title-icon"))
+        head.append(small(self.data["title"], "title"))
+        sub = small(f"{total} shortcuts  ·  {self.data['source']}", "subtitle")
+        sub.set_valign(Gtk.Align.BASELINE)
+        head.append(sub)
+        head.append(Gtk.Box(hexpand=True))
+        self.search = Gtk.SearchEntry(placeholder_text="Search shortcuts…")
+        self.search.add_css_class("search")
+        self.search.connect("search-changed", self.filter)
+        self.search.connect("stop-search", lambda *_: self.quit())
+        head.append(self.search)
+        card.append(head)
+
+        # body: columns of section cards, config order kept, heights balanced
+        scroller = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                      propagate_natural_height=True, max_content_height=max_h - 150)
+        cols = Gtk.Box(spacing=12, homogeneous=True, valign=Gtk.Align.START)
+        col_boxes = [Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12) for _ in range(columns)]
+        for c in col_boxes:
+            cols.append(c)
+        data = self.data["sections"]
+        for i, chunk in enumerate(partition([2.4 + len(rows) for _, rows in data], columns)):
+            for j in chunk:
+                widget, row_widgets = self.build_section(*data[j])
+                col_boxes[i].append(widget)
+                self.sections.append((widget, row_widgets))
+        self.empty = small("No shortcut matches that", "empty")
+        self.empty.set_visible(False)
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body.append(cols)
+        body.append(self.empty)
+        scroller.set_child(body)
+        card.append(scroller)
+
+        # footer
+        foot = Gtk.Box(spacing=6, halign=Gtk.Align.CENTER)
+        foot.add_css_class("footer")
+        hints = [[("Esc", None), " close"], [("Type", None), " to search"], self.data["toggle"] + [" toggle"]]
+        for parts in hints:
+            for p in parts:
+                if p == "+":
+                    foot.append(small("+", "plus"))
+                elif isinstance(p, str):
+                    foot.append(Gtk.Label(label=p.strip()))
+                else:
+                    foot.append(keycap(*p))
+            foot.append(small("·", "or"))
+        foot.remove(foot.get_last_child())
+        card.append(foot)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self.on_key)
+        win.add_controller(keys)
+
+        win.set_child(overlay)
+        win.present()
+        self.search.grab_focus()
+
+    def build_section(self, name, rows):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.add_css_class("section")
+        title = Gtk.Box()
+        title.append(small(section_icon(name), "section-icon"))
+        title.append(small(name.upper(), "section-title"))
+        title.append(Gtk.Box(hexpand=True))
+        title.append(small(str(len(rows)), "section-count"))
+        box.append(title)
+
+        grid = Gtk.Grid(row_spacing=5, column_spacing=14)
+        widgets = []
+        for r, row in enumerate(rows):
+            keys = Gtk.Box(valign=Gtk.Align.CENTER)
+            keys.add_css_class("row")
+            for label, cls in row["mods"]:
+                keys.append(keycap(label, cls))
+                keys.append(small("+", "plus"))
+            for i, k in enumerate(row["keys"]):
+                if i:
+                    keys.append(small("/", "or"))
+                keys.append(keycap(k))
+            desc = Gtk.Label(label=row["desc"], xalign=0, hexpand=True, ellipsize=3)
+            desc.add_css_class("desc")
+            grid.attach(keys, 0, r, 1, 1)
+            grid.attach(desc, 1, r, 1, 1)
+            hay = " ".join([name, row["desc"]] + [m for m, _ in row["mods"]] + row["keys"]).lower()
+            self.rows.append(((keys, desc), hay, box))
+            widgets.append((keys, desc))
+        box.append(grid)
+        return box, widgets
+
+    def filter(self, entry):
+        terms = entry.get_text().lower().split()
+        visible = set()
+        for (keys, desc), hay, section in self.rows:
+            show = all(t in hay for t in terms)
+            keys.set_visible(show)
+            desc.set_visible(show)
+            if show:
+                visible.add(section)
+        for section, _ in self.sections:
+            section.set_visible(section in visible)
+        self.empty.set_visible(not visible)
+
+    def on_key(self, _ctl, keyval, _code, state):
+        if keyval == Gdk.KEY_Escape:
+            self.quit()
+            return True
+        if keyval == Gdk.KEY_f and state & Gdk.ModifierType.CONTROL_MASK:
+            self.search.grab_focus()
+            return True
+        if not self.search.has_focus() and Gdk.keyval_to_unicode(keyval) and not state & Gdk.ModifierType.CONTROL_MASK:
+            self.search.grab_focus()
+        return False
+
+
+if __name__ == "__main__":
+    if toggle_running():
+        sys.exit(0)
+    with open(PIDFILE, "w") as f:
+        f.write(f"{os.getpid()} {MODE}")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        Cheatsheet(load()).run([])
+    finally:
+        try:
+            if open(PIDFILE).read().split()[0] == str(os.getpid()):
+                os.unlink(PIDFILE)
+        except (OSError, IndexError):
+            pass

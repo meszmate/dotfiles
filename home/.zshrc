@@ -33,7 +33,7 @@ alias update='yay -Syu'
 alias dots='cd ~/dotfiles'
 alias hyprcfg='nvim ~/.config/hypr/hyprland.lua'
 alias hyprlog='hyprctl rollinglog -f'
-alias keys='~/.config/rofi/scripts/keybinds'   # keybind cheatsheet (SUPER+/)
+alias keys='keybinds'          # keybind cheatsheet overlay (SUPER+/); `keys tmux` for tmux
 
 # AI agents
 alias cc='claude'

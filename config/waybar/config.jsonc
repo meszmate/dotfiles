@@ -13,6 +13,7 @@
 
     "modules-left": [
         "custom/launcher",
+        "custom/keybinds",
         "hyprland/workspaces",
         "hyprland/submap",
         "hyprland/window"
@@ -46,6 +47,12 @@
         "tooltip-format": "Apps  ·  SUPER+Space",
         "on-click": "rofi -show drun",
         "on-click-right": "rofi -show window"
+    },
+
+    "custom/keybinds": {
+        "format": "󰌌",
+        "tooltip-format": "Keybinds  ·  SUPER+/",
+        "on-click": "~/.local/bin/keybinds"
     },
 
     "hyprland/workspaces": {
