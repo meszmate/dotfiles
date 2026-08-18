@@ -29,6 +29,8 @@ Rectangle {
         id: content
         anchors.centerIn: parent
         spacing: 6
+        layer.enabled: true
+        layer.effect: Halo { size: 0.75 }
         Text { text: chip.icon; visible: chip.icon !== ""; color: chip.fg
                font { family: monoFont; pixelSize: chip.size + 1 } anchors.verticalCenter: parent.verticalCenter }
         Text { text: chip.label; color: chip.fg

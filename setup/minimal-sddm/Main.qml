@@ -40,6 +40,9 @@ Rectangle {
     readonly property color cGreen:  cfgStr("colorGreen",  "#3ea982")
     readonly property color cGlass:  cfgStr("passwordInputBackground", "#40ffffff")
     readonly property real  glassBlur: cfgNum("glassBlur", 48)
+    readonly property real  textHalo:  cfgNum("textHalo", 0.6)
+    readonly property real  cornerShade: cfgNum("cornerShade", 0.4)
+    readonly property var   shadeCorners: cfgStr("cornerShadeCorners", "tr,bl,br").split(",").map(function (c) { return c.trim() })
 
     readonly property string uiFont:   cfgStr("font", "Inter")
     readonly property string monoFont: cfgStr("monoFont", "JetBrainsMono Nerd Font")
@@ -159,6 +162,16 @@ Rectangle {
             }
             FastBlur { anchors.fill: wall; source: wall; radius: cfgNum("blurRadius", 0); visible: !wall.visible && wall.status === Image.Ready }
             Rectangle { anchors.fill: parent; color: "#000000"; opacity: cfgNum("dim", 0) }
+            // soft ink shades in the corners that hold text (clock, chips, power)
+            Repeater {
+                model: cornerShade > 0 ? shadeCorners : []
+                CornerShade {
+                    corner: modelData; strength: cornerShade
+                    width: background.width * 0.42; height: background.height * 0.5
+                    x: onRight  ? background.width  - width  : 0
+                    y: onBottom ? background.height - height : 0
+                }
+            }
         }
         Rectangle {   // short red flash on a wrong password
             id: flashRect
@@ -181,7 +194,7 @@ Rectangle {
                 color: cText
                 font { family: uiFont; pixelSize: 96; weight: Font.Light; letterSpacing: -2 }
                 layer.enabled: true
-                layer.effect: DropShadow { transparentBorder: true; radius: 18; samples: 37; color: alpha(cInk, 0.45); verticalOffset: 3 }
+                layer.effect: Halo { size: 2 }
             }
             Text {
                 anchors.right: parent.right
@@ -189,7 +202,7 @@ Rectangle {
                 color: cText
                 font { family: uiFont; pixelSize: 22; weight: Font.Medium }
                 layer.enabled: true
-                layer.effect: DropShadow { transparentBorder: true; radius: 12; samples: 25; color: alpha(cInk, 0.45); verticalOffset: 2 }
+                layer.effect: Halo { size: 1.25 }
             }
         }
 
@@ -252,7 +265,7 @@ Rectangle {
                     font { family: (phase === "ok" || phase === "fail" || (otherUser && userName === "")) ? monoFont : uiFont
                            pixelSize: (phase === "ok" || phase === "fail") ? 48 : 46; weight: Font.DemiBold }
                     layer.enabled: true
-                    layer.effect: DropShadow { transparentBorder: true; radius: 8; samples: 17; color: alpha(cInk, 0.35); verticalOffset: 1 }
+                    layer.effect: Halo {}
                 }
                 Rectangle {   // state ring
                     anchors.fill: parent; radius: width / 2; color: "transparent"
@@ -293,7 +306,7 @@ Rectangle {
                     Keys.onLeftPressed:   nextUser(-1)
                     Keys.onRightPressed:  nextUser(1)
                     layer.enabled: true
-                    layer.effect: DropShadow { transparentBorder: true; radius: 12; samples: 25; color: alpha(cInk, 0.45); verticalOffset: 2 }
+                    layer.effect: Halo { size: 1.25 }
                     MouseArea {
                         id: nameArea
                         anchors.fill: parent; anchors.margins: -8
@@ -319,6 +332,8 @@ Rectangle {
                         color: cText; font { family: uiFont; pixelSize: 16; weight: Font.Medium }
                         selectionColor: cAccent; selectedTextColor: cText
                         clip: true
+                        layer.enabled: true
+                        layer.effect: Halo { size: 0.75 }
                         activeFocusOnTab: otherUser
                         onAccepted: password.forceActiveFocus()
                         Keys.onEscapePressed: { if (userModel.count > 0) { otherUser = false; password.forceActiveFocus() } else text = "" }
@@ -330,6 +345,8 @@ Rectangle {
                         text: gUser; color: cText; opacity: listBtn.containsMouse ? 1 : 0.7
                         font { family: monoFont; pixelSize: 16 }
                         visible: userModel.count > 0
+                        layer.enabled: true
+                        layer.effect: Halo { size: 0.75 }
                         MouseArea { id: listBtn; anchors.fill: parent; anchors.margins: -8; hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor; onClicked: userPicker.open() }
                     }
@@ -339,6 +356,8 @@ Rectangle {
                     text: gLeft; color: cText; opacity: arrowL.containsMouse ? 1 : 0.6
                     font { family: monoFont; pixelSize: 28 }
                     visible: userModel.count > 1 && !otherUser
+                    layer.enabled: true
+                    layer.effect: Halo {}
                     MouseArea { id: arrowL; anchors.fill: parent; anchors.margins: -10; hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor; onClicked: nextUser(-1) }
                 }
@@ -347,6 +366,8 @@ Rectangle {
                     text: gRight; color: cText; opacity: arrowR.containsMouse ? 1 : 0.6
                     font { family: monoFont; pixelSize: 28 }
                     visible: userModel.count > 1 && !otherUser
+                    layer.enabled: true
+                    layer.effect: Halo {}
                     MouseArea { id: arrowR; anchors.fill: parent; anchors.margins: -10; hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor; onClicked: nextUser(1) }
                 }
@@ -384,14 +405,14 @@ Rectangle {
                     Keys.onDownPressed: nextUser(1)
                     onTextEdited: if (phase === "fail") { failTimer.stop(); phase = "idle" }
                     layer.enabled: true
-                    layer.effect: DropShadow { transparentBorder: true; radius: 6; samples: 13; color: alpha(cInk, 0.35); verticalOffset: 1 }
+                    layer.effect: Halo { size: 0.75 }
                 }
                 Text {   // placeholder / state text
                     anchors { fill: parent; leftMargin: 26; rightMargin: 60 }
                     verticalAlignment: Text.AlignVCenter
                     visible: password.text === "" || phase !== "idle"
                     layer.enabled: true
-                    layer.effect: DropShadow { transparentBorder: true; radius: 6; samples: 13; color: alpha(cInk, 0.35); verticalOffset: 1 }
+                    layer.effect: Halo { size: 0.75 }
                     font { family: uiFont; pixelSize: 16; weight: phase === "idle" ? Font.Normal : Font.DemiBold }
                     text: phase === "busy" ? "Signing in…"
                         : phase === "fail" ? "Wrong password"
@@ -407,6 +428,8 @@ Rectangle {
                     color: cText
                     opacity: eyeArea.containsMouse || on || activeFocus ? 1 : 0.6
                     font { family: monoFont; pixelSize: 20 }
+                    layer.enabled: true
+                    layer.effect: Halo { size: 0.75 }
                     activeFocusOnTab: true
                     Keys.onReturnPressed: on = !on
                     Keys.onEnterPressed:  on = !on
