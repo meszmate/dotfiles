@@ -180,7 +180,9 @@ CORE_PKGS=(
   grim slurp swappy wf-recorder wl-clipboard cliphist wl-clip-persist
   # Terminal, shell & CLI tools
   kitty zsh starship tmux fzf zoxide eza bat fd ripgrep jq lazygit btop
-  man-db unzip wget neovim
+  man-db unzip wget
+  # Neovim + what nvim-treesitter (main) needs to build parsers (gcc comes with base-devel)
+  neovim tree-sitter-cli
   # Audio
   pipewire pipewire-alsa pipewire-pulse wireplumber pamixer pavucontrol playerctl
   # Network
@@ -210,7 +212,7 @@ DEV_PKGS=(
   # Containers & git tooling
   docker docker-compose lazydocker git-delta direnv
   # Shell / misc language tooling
-  shellcheck shfmt tree-sitter-cli
+  shellcheck shfmt
 )
 AI_PKGS=(github-cli)
 AI_AUR_PKGS=(t3code-bin)
