@@ -250,6 +250,18 @@ if [[ $P_PKGS -eq 1 ]]; then
     rustup default stable >>"$INSTLOG" 2>&1
     ok "rust stable ready"
   fi
+
+  # Salesforce CLI (sf.nvim + the Apex LSP in Neovim use it) — npm package, so it
+  # goes through pnpm's global dir (~/.local/share/pnpm/bin, on PATH via .zshrc)
+  if [[ $P_DEV -eq 1 ]] && ! command -v sf >/dev/null 2>&1; then
+    note "Installing the Salesforce CLI (@salesforce/cli via pnpm)..."
+    if PNPM_HOME="$HOME/.local/share/pnpm" PATH="$HOME/.local/share/pnpm/bin:$HOME/.local/share/pnpm:$PATH" \
+       pnpm add -g @salesforce/cli >>"$INSTLOG" 2>&1; then
+      ok "sf CLI installed"
+    else
+      warn "Salesforce CLI install failed (see $INSTLOG) — pnpm add -g @salesforce/cli"
+    fi
+  fi
 else
   warn "Skipped package installation"
 fi
