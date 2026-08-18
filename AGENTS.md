@@ -49,7 +49,11 @@ Arch install with `setup/arch.sh`. Everything below follows from that.
 ## Testing tips
 
 - Hyprland: `hyprctl reload` (Lua config errors show in `hyprctl rollinglog`).
-- waybar: `pkill -SIGUSR2 waybar` reloads config; CSS reloads on save.
+- The desktop shell (waybar, swaync, hypridle, hyprpaper, hyprsunset,
+  hyprpolkitagent, swayosd) runs as systemd --user units started by
+  `lua/autostart.lua` (`Restart=on-failure`): `systemctl --user restart waybar`,
+  `journalctl --user -u waybar`. `pkill -SIGUSR2 waybar` reloads its config;
+  CSS reloads on save.
 - SDDM theme: `sddm-greeter-qt6 --test-mode --theme setup/minimal-sddm`
   (password `sddm` fakes success; QML errors go to
   `journalctl _COMM=sddm-greeter-qt`; kill with `pkill -x sddm-greeter-qt`).

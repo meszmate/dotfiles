@@ -174,7 +174,7 @@ password `sddm` succeeds, anything else fails).
 | `input.lua` | keyboard, touchpad, gestures |
 | `rules.lua` | window / layer / workspace rules (scratchpads live here) |
 | `binds.lua` | keybinds — `group("Section")` then `bind(keys, dispatcher, "description")`; the cheatsheet reads both |
-| `autostart.lua` | programs started with the session |
+| `autostart.lua` | programs started with the session — the shell (waybar, swaync, hypridle, hyprpaper, hyprsunset, swayosd) as systemd user units that restart on crash: `systemctl --user restart waybar`, `journalctl --user -u waybar` |
 | `monitors.lua` | *machine-local*, gitignored — see `monitors.lua.example` |
 | `local.lua` | *optional, gitignored* — machine-specific overrides |
 

@@ -1,0 +1,11 @@
+# Marks the Hyprland session as the systemd --user graphical session, so the
+# packaged user units of the desktop shell (waybar, swaync, hypridle,
+# hyprpaper, hyprsunset, hyprpolkitagent — all "PartOf graphical-session.target",
+# Restart=on-failure) can run under systemd. lua/autostart.lua links this file
+# into ~/.local/share/systemd/user, starts it on hyprland.start and stops it on
+# hyprland.shutdown. graphical-session.target itself refuses manual start.
+[Unit]
+Description=Hyprland session (started from hyprland.lua)
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
