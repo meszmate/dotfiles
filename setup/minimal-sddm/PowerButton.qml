@@ -26,22 +26,29 @@ Item {
         border.color: hot ? alpha("#ffffff", 0.9) : alpha("#ffffff", 0.35)
         Behavior on color { ColorAnimation { duration: 140 } }
     }
-    Text {
+    Item {   // fixed round slot; the glyph is centred in it whatever its advance width
         id: glyph
-        anchors { left: parent.left; leftMargin: 13; verticalCenter: parent.verticalCenter }
-        text: btn.icon
-        color: cText
-        font { family: monoFont; pixelSize: 20 }
+        width: 46; height: 46
+        Text {
+            anchors { centerIn: parent; verticalCenterOffset: -1 }
+            text: btn.icon
+            color: cText
+            font { family: monoFont; pixelSize: 20 }
+            layer.enabled: true
+            layer.effect: Halo { size: 0.75 }
+        }
     }
     Text {
         id: text
-        anchors { left: glyph.right; leftMargin: 8; verticalCenter: parent.verticalCenter }
+        anchors { left: glyph.right; leftMargin: 2; verticalCenter: parent.verticalCenter }
         text: btn.label
         color: cText
         opacity: hot ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 140 } }
         font { family: uiFont; pixelSize: 14; weight: Font.Medium }
+        layer.enabled: true
+        layer.effect: Halo { size: 0.75 }
     }
     MouseArea {
         id: area
