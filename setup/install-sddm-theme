@@ -1,14 +1,70 @@
 #!/usr/bin/env bash
-# Installs/updates the minimal-sddm login theme with the current wallpaper so
-# the login screen matches the lock screen and desktop. Needs sudo.
+# Installs the minimal-sddm login theme + the sddm.conf.d snippet. Needs sudo.
+#
+# By default /usr/share/sddm/themes/minimal-sddm becomes a symlink to
+# setup/minimal-sddm in this repo, so edits (and `git pull`) go live at the
+# next login without re-running anything. The greeter runs as the `sddm` user
+# before you log in, so it is given traverse (--x only) access to ~ and the
+# repo path via a POSIX ACL — nobody else gains access and file contents stay
+# private. If that cannot be made to work the script falls back to a copy.
+#
+#   install-sddm-theme          symlink (default; INSTALL_MODE=copy also honoured)
+#   install-sddm-theme --copy   copy the theme into /usr/share instead
+#
+# The current desktop wallpaper is also dropped in as wallpaper.jpg so the
+# theme can use it (theme.conf: background=wallpaper.jpg).
 set -euo pipefail
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+MODE="${INSTALL_MODE:-symlink}"
+[[ "${1:-}" == "--copy" ]] && MODE="copy"
+
+SRC="$DOTFILES_DIR/setup/minimal-sddm"
+DEST="/usr/share/sddm/themes/minimal-sddm"
 WALL="$DOTFILES_DIR/config/hypr/wallpaper.jpg"
 [[ -e "$HOME/.config/hypr/wallpaper.current" ]] && WALL="$(readlink -f "$HOME/.config/hypr/wallpaper.current")"
 
 sudo mkdir -p /usr/share/sddm/themes /etc/sddm.conf.d
-sudo rm -rf /usr/share/sddm/themes/minimal-sddm
-sudo cp -r "$DOTFILES_DIR/setup/minimal-sddm" /usr/share/sddm/themes/minimal-sddm
-sudo cp "$WALL" /usr/share/sddm/themes/minimal-sddm/wallpaper.jpg
+
+# Give the sddm user traverse rights on every directory above the theme it
+# cannot already enter (normally just ~, which is 700), walking top-down so a
+# dir is only touched if it is still unreachable once its parents are open.
+# The theme dir itself gets r-x, not just --x: Qt >= 6.11 checks that a QML
+# file exists by *listing* its directory (case-sensitivity check) and reports
+# "File name case mismatch" if it can stat the file but not read the dir.
+grant_sddm_traverse() {
+  local d="$SRC" dirs=()
+  while [[ "$d" != "/" ]]; do dirs=("$d" "${dirs[@]}"); d="$(dirname "$d")"; done
+  for d in "${dirs[@]}"; do
+    local perm="--x"; [[ "$d" == "$SRC" ]] && perm="r-x"
+    if [[ "$d" == "$SRC" ]] || ! sudo -u sddm test -x "$d"; then
+      if [[ -O "$d" ]]; then setfacl -m "u:sddm:$perm" "$d"; else sudo setfacl -m "u:sddm:$perm" "$d"; fi
+    fi
+  done
+  sudo -u sddm test -r "$SRC/Main.qml" && sudo -u sddm ls "$SRC" >/dev/null
+}
+
+if [[ "$MODE" == "symlink" ]]; then
+  if grant_sddm_traverse; then
+    if [[ ! -L "$DEST" || "$(readlink "$DEST")" != "$SRC" ]]; then
+      sudo rm -rf "$DEST"
+      sudo ln -s "$SRC" "$DEST"
+    fi
+    # Not sudo: the file lives in the (user-owned, gitignored) repo dir.
+    cp "$WALL" "$SRC/wallpaper.jpg"
+    chmod 644 "$SRC/wallpaper.jpg"
+    echo "SDDM theme linked: $DEST -> $SRC (wallpaper: $WALL)"
+  else
+    echo "warning: the sddm user cannot read $SRC (ACLs unsupported?) — copying instead" >&2
+    MODE="copy"
+  fi
+fi
+
+if [[ "$MODE" == "copy" ]]; then
+  sudo rm -rf "$DEST"
+  sudo cp -r "$SRC" "$DEST"
+  sudo rm -f "$DEST/wallpaper.jpg"
+  sudo cp "$WALL" "$DEST/wallpaper.jpg"
+  echo "SDDM theme copied to $DEST (wallpaper: $WALL) — re-run this after editing the theme"
+fi
+
 sudo cp "$DOTFILES_DIR/setup/sddm.conf.d/10-theme.conf" /etc/sddm.conf.d/10-theme.conf
-echo "SDDM theme installed to /usr/share/sddm/themes/minimal-sddm (wallpaper: $WALL)"

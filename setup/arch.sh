@@ -445,8 +445,8 @@ fi
 section "SDDM login theme"
 if [[ $P_SDDM -eq 1 ]]; then
   # Same wallpaper on the login screen as on the desktop / lock screen
-  "$DOTFILES_DIR/setup/install-sddm-theme" >>"$INSTLOG" 2>&1
-  ok "Theme installed to /usr/share/sddm/themes/minimal-sddm (re-run setup/install-sddm-theme after changing the wallpaper)"
+  INSTALL_MODE="$INSTALL_MODE" "$DOTFILES_DIR/setup/install-sddm-theme" >>"$INSTLOG" 2>&1
+  if [[ "$INSTALL_MODE" == "symlink" ]]; then ok "Theme linked from setup/minimal-sddm (edits go live at the next login)"; else ok "Theme copied to /usr/share/sddm/themes/minimal-sddm (re-run setup/install-sddm-theme after editing it)"; fi
 else
   warn "Skipped SDDM theme"
 fi

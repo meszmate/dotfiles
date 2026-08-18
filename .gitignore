@@ -8,3 +8,6 @@ config/gtk-3.0/bookmarks
 config/gtk-3.0/servers
 __pycache__/
 *.pyc
+
+# Dropped in by setup/install-sddm-theme (desktop wallpaper for the login theme)
+setup/minimal-sddm/wallpaper.jpg
