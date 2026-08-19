@@ -78,7 +78,7 @@ tooltip label {
 #disk,
 #tray,
 #privacy,
-#idle_inhibitor,
+#custom-idle,
 #custom-nightlight,
 #pulseaudio,
 #backlight,
@@ -106,7 +106,7 @@ tooltip label {
 #memory:hover,
 #temperature:hover,
 #disk:hover,
-#idle_inhibitor:hover,
+#custom-idle:hover,
 #custom-nightlight:hover,
 #pulseaudio:hover,
 #backlight:hover,
@@ -234,12 +234,10 @@ window#waybar.empty #window {
 #privacy-item.audio-in    { color: @red; }
 #privacy-item.audio-out   { color: @blue; }
 
-#idle_inhibitor {
-    color: @overlay1;
-}
-#idle_inhibitor.activated {
-    color: @yellow;
-}
+#custom-idle                { color: @overlay1; }
+#custom-idle.awake          { color: @yellow; }
+#custom-idle.presentation   { color: @red; }
+#custom-idle.custom         { color: @peach; }
 
 #custom-nightlight     { color: @overlay1; }
 #custom-nightlight.on  { color: @peach; }

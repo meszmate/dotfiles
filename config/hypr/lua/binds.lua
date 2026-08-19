@@ -36,6 +36,8 @@ bind(mod .. " + SHIFT + W",    run(apps.wallpapers), "Wallpaper picker")
 -- Session --------------------------------------------------------------------
 group("Session")
 bind(mod .. " + period",       run("pgrep -x hypridle >/dev/null && loginctl lock-session || " .. apps.scripts .. "/lock"), "Lock screen")
+bind(mod .. " + I",            run(apps.idle .. " toggle"), "Idle mode: normal → awake → presentation")
+bind(mod .. " + SHIFT + I",    run(apps.idle .. " menu"),   "Idle mode menu")
 bind(mod .. " + escape",       run(apps.powermenu), "Power menu")
 bind(mod .. " + SHIFT + Q",    run(apps.logout),    "Log out (graceful)")
 bind(mod .. " + CTRL + X",     run(apps.poweroff),  "Shut down (graceful)")

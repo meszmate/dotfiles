@@ -18,8 +18,8 @@ every shortcut, grouped and searchable, rendered live from `hyprctl binds`:
   emoji, clipboard, power menu, wallpaper picker, keybind cheatsheet ·
   **swaync** notification center with quick toggles · **swayosd** volume /
   brightness overlay · **hyprlock** HUD-style lock screen with a "hacker mode"
-  on wrong passwords (`scripts/lock-fx`) · **hypridle**
-  · **hyprsunset** night light · **hyprpolkitagent** · **hyprshutdown**
+  on wrong passwords (`scripts/lock-fx`) · **hypridle** with switchable idle
+  modes (`bin/idle`) · **hyprsunset** night light · **hyprpolkitagent** · **hyprshutdown**
 - **kitty**, **zsh** + starship, **tmux** (`prefix + ?` = the same cheatsheet
   overlay for tmux keys), **Neovim** (submodule)
 - GTK (adw-gtk3-dark + Papirus) and Qt (qt6ct, Catppuccin palette) themed alike
@@ -140,6 +140,32 @@ exactly what used to happen on the first wrong password.
 `scripts/lock` is what `SUPER + .` / hypridle call: it checks `hyprctl locked`
 and clears stale hyprlock instances instead of relying on `pidof`.
 
+### Idle modes
+
+hypridle dims at 5 min, locks at 10, turns the displays off at 15 and suspends
+at 30 (on battery only). Every one of those actions goes through
+`idle run <action>` (`bin/idle`), which drops it when the current mode has that
+action switched off — so a mode change applies instantly, with no config to
+regenerate and no timers restarted:
+
+| mode | what still happens |
+| --- | --- |
+| `normal` | dim, lock, screen off, suspend — the default |
+| `awake` | nothing but the lock — the screen never dims or blanks |
+| `presentation` | nothing at all |
+
+`SUPER + I` cycles the three, `SUPER + SHIFT + I` opens the rofi menu, and the
+waybar 󰾪 in the tools drawer shows the current one (click cycles, right-click
+opens the menu). The menu also flips the four actions individually, which is
+what `idle toggle dim|lock|screenoff|suspend` does — any combination that isn't
+one of the three presets simply shows as `custom`. `idle` on its own prints the
+current mode and every timeout.
+
+The mode lives in `$XDG_RUNTIME_DIR`, so a reboot always comes back to
+`normal` — a forgotten `presentation` can't keep the laptop awake overnight.
+The timeouts are four `$..._TIMEOUT` variables at the top of `hypridle.conf`;
+change one and run `idle reload`.
+
 ### Login screen
 
 `setup/minimal-sddm/` is a Qt6 SDDM theme with its own look — the sharp
@@ -229,7 +255,8 @@ config/           → symlinked into ~/.config/
   tmux/           tmux, self-installing tpm plugins (scripts/bootstrap)
   starship.toml   prompt
 home/             → symlinked into ~/ (.zshrc, ...)
-bin/              → symlinked into ~/.local/bin (keybinds overlay, claude-notify)
+bin/              → symlinked into ~/.local/bin (keybinds overlay, idle modes,
+                  claude-notify)
 setup/
   arch.sh              the installer
   fix-network          make NetworkManager the only network manager

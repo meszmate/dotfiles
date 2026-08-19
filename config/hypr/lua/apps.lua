@@ -21,6 +21,7 @@ return {
     clipboard   = rofi .. "/clipboard",
     powermenu   = rofi .. "/powermenu",
     cheatsheet  = home .. "/.local/bin/keybinds",   -- GTK overlay (SUPER+/, waybar 󰌌; bin/keybinds)
+    idle        = home .. "/.local/bin/idle",       -- idle modes (bin/idle; waybar 󰾪)
     wallpapers  = rofi .. "/wallpaper",
 
     -- helpers shipped in config/hypr/scripts/

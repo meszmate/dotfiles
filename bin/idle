@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# idle — control what the session is allowed to do when you stop touching it.
+#
+# hypridle's timeouts (config/hypr/hypridle.conf) always run; every action they
+# fire goes through `idle run <action>`, which drops it when the current mode
+# has that action switched off. So changing mode takes effect immediately — no
+# config regeneration, no restarting hypridle, no timers lost.
+#
+#   idle                     what is on right now
+#   idle normal              dim → lock → screen off → suspend (the default)
+#   idle awake               keep the screen on; still locks on schedule
+#   idle presentation        nothing happens at all
+#   idle toggle              cycle normal → awake → presentation → normal
+#   idle toggle screenoff    flip one action (dim | lock | screenoff | suspend)
+#   idle menu                the same thing as a rofi menu (SUPER + SHIFT + I)
+#   idle reload              re-read hypridle.conf after editing the timeouts
+#   idle waybar              JSON for the waybar module
+#   idle run <action>        internal — this is what hypridle calls
+#
+# The mode is per-boot state ($XDG_RUNTIME_DIR), so a reboot always comes back
+# to `normal` and a forgotten "presentation" can never keep the laptop awake.
+set -uo pipefail
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/idle.off"   # space-separated actions that are OFF
+CONF="$HOME/.config/hypr/hypridle.conf"
+ACTIONS=(dim lock screenoff suspend)
+
+# mode → the actions it switches off
+preset_normal=""
+preset_awake="dim screenoff suspend"
+preset_presentation="dim lock screenoff suspend"
+
+read_off() { local o=""; [[ -r "$STATE" ]] && read -r o < "$STATE"; printf '%s' "$o"; }
+is_off()   { [[ " $(read_off) " == *" $1 "* ]]; }
+write_off() { printf '%s\n' "$1" > "$STATE"; pkill -RTMIN+10 waybar 2>/dev/null; }
+
+mode_name() { # the preset matching the current set, or "custom"
+    local cur; cur=$(sort_words "$(read_off)")
+    for m in normal awake presentation; do
+        local v="preset_$m"
+        [[ "$cur" == "$(sort_words "${!v}")" ]] && { printf '%s' "$m"; return; }
+    done
+    printf 'custom'
+}
+sort_words() { printf '%s' "$(printf '%s\n' $1 | sort | tr '\n' ' ')"; }
+
+icon() { case "$1" in normal) printf '󰾪' ;; awake) printf '󰅶' ;; presentation) printf '󰐺' ;; *) printf '󰾞' ;; esac; }
+blurb() {
+    case "$1" in
+        normal)       printf 'dim, lock, screen off and suspend all on schedule' ;;
+        awake)        printf 'screen stays on — still locks on schedule' ;;
+        presentation) printf 'nothing happens: no dim, lock, screen off or suspend' ;;
+        *)            local on=() ; for a in "${ACTIONS[@]}"; do is_off "$a" || on+=("$a"); done
+                      printf 'only %s' "$( ((${#on[@]})) && printf '%s, ' "${on[@]::${#on[@]}-1}" && printf '%s' "${on[-1]}" || printf 'nothing' )" ;;
+    esac
+}
+# the timeout of each listener, straight out of hypridle.conf's $VARs
+timeout_of() { local v; v=$(sed -n "s/^\\\$${1^^}_TIMEOUT[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p" "$CONF" 2>/dev/null | head -1); printf '%s' "${v:-?}"; }
+pretty_time() { local s=$1; [[ $s == '?' ]] && { printf '?'; return; }
+    (( s % 3600 == 0 )) && printf '%dh' $(( s / 3600 )) || printf '%dm' $(( s / 60 )); }
+
+notify() { notify-send -a "Idle" -i preferences-desktop-screensaver -t 2000 \
+    "$(icon "$1")  Idle: $1" "$(blurb "$1")" 2>/dev/null; }
+
+set_mode() {
+    local v="preset_$1"
+    write_off "${!v}"
+    notify "$1"
+}
+
+case "${1:-status}" in
+# --- what hypridle calls ----------------------------------------------------
+run)
+    action="${2:-}"
+    is_off "$action" && exit 0          # switched off in this mode → do nothing
+    case "$action" in
+        dim)       brightnessctl -s set 10% ;;
+        undim)     is_off dim || brightnessctl -r ;;   # only restore what we dimmed
+        lock)      loginctl lock-session ;;
+        screenoff) hyprctl dispatch 'hl.dsp.dpms({ action = "off" })' ;;
+        screenon)  hyprctl dispatch 'hl.dsp.dpms({ action = "on" })' ;;
+        suspend)   systemctl suspend ;;
+        *)         echo "idle run: unknown action '$action'" >&2; exit 1 ;;
+    esac ;;
+# --- modes ------------------------------------------------------------------
+normal|awake|presentation) set_mode "$1" ;;
+toggle)
+    if [[ -n "${2:-}" ]]; then                       # flip a single action
+        [[ " ${ACTIONS[*]} " == *" $2 "* ]] || { echo "idle toggle: ${ACTIONS[*]}" >&2; exit 1; }
+        off=$(read_off)
+        if is_off "$2"; then off=" $off "; off=${off//" $2 "/ }
+        else off="$off $2"; fi
+        write_off "$(sort_words "$off")"
+        notify "$(mode_name)"
+    else                                             # cycle the three presets
+        case "$(mode_name)" in
+            normal) set_mode awake ;;
+            awake)  set_mode presentation ;;
+            *)      set_mode normal ;;
+        esac
+    fi ;;
+# --- output -----------------------------------------------------------------
+status)
+    m=$(mode_name)
+    printf '%s  %s — %s\n\n' "$(icon "$m")" "$m" "$(blurb "$m")"
+    for a in "${ACTIONS[@]}"; do
+        is_off "$a" && s="off" || s="on  after $(pretty_time "$(timeout_of "$a")")"
+        printf '  %-10s %s\n' "$a" "$s"
+    done
+    printf '\nedit the timeouts in %s, then: idle reload\n' "${CONF/#$HOME/\~}" ;;
+waybar)
+    m=$(mode_name)
+    printf '{"text":"%s","tooltip":"Idle: %s — %s\\nclick: cycle · right-click: menu","class":"%s"}\n' \
+        "$(icon "$m")" "$m" "$(blurb "$m")" "$m" ;;
+reload)
+    systemctl --user restart hypridle && echo "hypridle restarted with the timeouts in $CONF" ;;
+menu)
+    THEME="$HOME/.config/rofi/menu.rasi"
+    TAB=$(printf '\t')
+    DIM="#6c7086"
+    cur=$(mode_name)
+    row() { printf '%s  <b>%-13s</b> <span foreground="%s"># %s</span>%s%s\n' "$1" "$2" "$DIM" "$3" "$TAB" "$4"; }
+    choice=$( {
+        for m in normal awake presentation; do
+            mark=$([[ "$m" == "$cur" ]] && echo "󰄴" || echo "$(icon "$m")")
+            row "$mark" "$m" "$(blurb "$m")" "$m"
+        done
+        for a in "${ACTIONS[@]}"; do
+            if is_off "$a"; then row "󰅖" "$a" "off — turn back on" "toggle $a"
+            else row "󰄬" "$a" "on after $(pretty_time "$(timeout_of "$a")") — switch off" "toggle $a"; fi
+        done
+    } | rofi -dmenu -i -markup-rows -p "idle" -theme "$THEME" \
+             -theme-str 'listview { lines: 7; } window { width: 620px; }' \
+             -mesg "mode: <b>$cur</b> · Enter applies · Esc aborts" \
+             -display-columns 1 -display-column-separator "$TAB") || exit 0
+    exec "$0" ${choice##*"$TAB"} ;;
+*)
+    echo "usage: idle [status|normal|awake|presentation|toggle [action]|menu|reload|waybar]" >&2; exit 1 ;;
+esac

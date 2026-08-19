@@ -149,11 +149,11 @@
             "children-class": "drawer-child",
             "transition-left-to-right": false
         },
-        "modules": ["custom/tools", "idle_inhibitor", "custom/nightlight", "power-profiles-daemon", "disk"]
+        "modules": ["custom/tools", "custom/idle", "custom/nightlight", "power-profiles-daemon", "disk"]
     },
     "custom/tools": {
         "format": "󰒓",
-        "tooltip-format": "hover: caffeine · night light · power profile · disk"
+        "tooltip-format": "hover: idle mode · night light · power profile · disk"
     },
     "cpu": {
         "interval": 5,
@@ -199,11 +199,15 @@
         ]
     },
 
-    "idle_inhibitor": {
-        "format": "{icon}",
-        "format-icons": { "activated": "󰅶", "deactivated": "󰾪" },
-        "tooltip-format-activated": "Caffeine on — screen stays awake",
-        "tooltip-format-deactivated": "Caffeine off — click to keep the screen awake"
+    // bin/idle — normal / awake / presentation, see `idle status`
+    "custom/idle": {
+        "exec": "~/.local/bin/idle waybar",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 10,
+        "format": "{}",
+        "on-click": "~/.local/bin/idle toggle",
+        "on-click-right": "~/.local/bin/idle menu"
     },
 
     "custom/nightlight": {
