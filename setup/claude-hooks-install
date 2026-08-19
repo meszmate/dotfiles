@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Adds the claude-notify hooks (setup/claude-hooks.json) to ~/.claude/settings.json
-# without touching anything else in there. Idempotent — safe to re-run.
+# Applies this repo's Claude Code preferences to ~/.claude/settings.json without
+# touching anything else in there. Idempotent — safe to re-run.
+#   • the claude-notify hooks (setup/claude-hooks.json)
+#   • includeCoAuthoredBy = false — keeps "Co-Authored-By: Claude" and the
+#     "Generated with Claude Code" line out of commit messages and PR bodies
 set -euo pipefail
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
 FRAGMENT="$DOTFILES_DIR/setup/claude-hooks.json"
@@ -20,11 +23,12 @@ jq -s '
       then .
       else .hooks[$ev] = ((.hooks[$ev] // []) + $add[$ev])
       end)
+  | .includeCoAuthoredBy = false
 ' "$SETTINGS" "$FRAGMENT" > "$tmp"
 if cmp -s "$tmp" "$SETTINGS"; then
-    rm -f "$tmp"; echo "claude-notify hooks already present in $SETTINGS"
+    rm -f "$tmp"; echo "$SETTINGS already up to date"
 else
     cp "$SETTINGS" "$SETTINGS.bak"
     mv "$tmp" "$SETTINGS"
-    echo "claude-notify hooks added to $SETTINGS (backup: settings.json.bak)"
+    echo "hooks + includeCoAuthoredBy written to $SETTINGS (backup: settings.json.bak)"
 fi

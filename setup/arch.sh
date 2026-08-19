@@ -283,9 +283,9 @@ if [[ $P_AI -eq 1 ]]; then
     fi
   fi
   command -v t3code >/dev/null && ok "T3 Code installed (t3code — drives claude/codex/opencode CLIs)"
-  # Notifications when an agent needs input / finishes (bin/claude-notify)
+  # Notification hooks (bin/claude-notify) + no Claude branding in commits/PRs
   if command -v jq >/dev/null; then
-    "$DOTFILES_DIR/setup/claude-hooks-install" >>"$INSTLOG" 2>&1 && ok "Claude Code notification hooks configured (~/.claude/settings.json)"
+    "$DOTFILES_DIR/setup/claude-hooks-install" >>"$INSTLOG" 2>&1 && ok "Claude Code configured (notify hooks, no co-author trailer)"
   fi
 else
   warn "Skipped AI tools"
