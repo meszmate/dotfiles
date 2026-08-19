@@ -4,11 +4,15 @@
 #   • already locked           → nothing to do
 #   • stale hyprlock lingering → kill it (it can't lock; `pidof hyprlock ||`
 #                                 would silently do nothing forever)
-#   • otherwise                → refresh the pre-rendered backgrounds, lock
+#   • otherwise                → clear the lock-fx state, refresh the
+#                                 pre-rendered backgrounds, lock
 set -u
 if [[ "$(hyprctl locked 2>/dev/null)" == "true" ]]; then exit 0; fi
 if pgrep -x hyprlock >/dev/null; then
     pkill -x hyprlock; sleep 0.3
 fi
+# a hyprlock killed mid-alarm leaves its "wrong password" state behind in
+# $XDG_RUNTIME_DIR — without this the next lock screen opens already in it
+"$HOME/.config/hypr/scripts/lock-fx" reset
 "$HOME/.config/hypr/scripts/lock-fx" prepare
 exec hyprlock "$@"

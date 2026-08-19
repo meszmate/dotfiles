@@ -124,12 +124,19 @@ instant. A wrong password puts the screen into "hacker mode", driven by
 `config/hypr/scripts/lock-fx`: the wallpaper hard-cuts to a red scan-lined
 copy, LOCKED glitch-decodes into ACCESS DENIED with a strike counter and a
 countermeasures bar, an intrusion log types out bottom-left and a hex stream
-keeps running bottom-right. It stays that way until you start typing again —
-the compositor sees the keypress (`lua/lockfx.lua`) and resets the screen so
-you retry on a calm HUD. Ticks slow down after a minute and stop after ten, so
-walking away costs nothing. Both wallpapers are pre-rendered by `lock-fx
-prepare` (run at login, before locking, and by the wallpaper picker) into
-`~/.cache/hyprlock`.
+keeps running bottom-right. The sequence runs for 8 s, or until you start
+typing again — the compositor sees the keypress (`lua/lockfx.lua`) and resets
+the screen so you retry on a calm HUD. Both wallpapers are pre-rendered by
+`lock-fx prepare` (run at login, before locking, and by the wallpaper picker)
+into `~/.cache/hyprlock`.
+
+Everything dynamic on this screen is polled by hyprlock's own `update:` timers.
+**Never send hyprlock SIGUSR2 to drive an animation**, and never give a widget
+`update:0:1` (SIGUSR2-only) expecting to refresh it that way: hyprlock's signal
+handler runs the timer callbacks — including a blocking `sh -c` for every
+`reload_cmd` — straight from the signal handler, racing the timer thread. A
+couple of those and the lock screen freezes with no way to type, which is
+exactly what used to happen on the first wrong password.
 `scripts/lock` is what `SUPER + .` / hypridle call: it checks `hyprctl locked`
 and clears stale hyprlock instances instead of relying on `pidof`.
 
@@ -189,9 +196,12 @@ at the shipped API stubs, so Neovim (lua_ls) completes `hl.*`.
 human or agent — changing this repo: every installed package goes into
 `setup/arch.sh`, every config into `config/`, so any machine can be rebuilt.
 
-- **Claude Code** — installed by setup; `~/.claude/settings.json` gets hooks that
-  send a desktop notification when Claude needs input or finishes while you're
-  in another window (`bin/claude-notify`, wired by `setup/claude-hooks-install`).
+- **Claude Code** — installed by setup; `setup/claude-hooks-install` writes two
+  things into `~/.claude/settings.json`: hooks that send a desktop notification
+  when Claude needs input or finishes while you're in another window
+  (`bin/claude-notify`), and `includeCoAuthoredBy: false`, which keeps
+  `Co-Authored-By: Claude` and "Generated with Claude Code" out of commit
+  messages and PR bodies.
 - **T3 Code** — `SUPER + T` (or the launcher); drives the `claude` CLI.
 - `SUPER + A` toggles an *agent* scratchpad (kitty in a persistent tmux session
   `agent`) that floats over any workspace; `SUPER + `` ` `` is a second one.
@@ -224,7 +234,7 @@ setup/
   arch.sh              the installer
   fix-network          make NetworkManager the only network manager
   install-sddm-theme   (re)link the login theme + sddm.conf.d (drops the wallpaper in too)
-  claude-hooks-install add the Claude Code notification hooks
+  claude-hooks-install Claude Code settings (notify hooks, no co-author trailer)
   minimal-sddm/        sddm login theme (Qt6 QML, frosted glass on tree.png)
 ```
 
