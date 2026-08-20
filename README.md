@@ -228,12 +228,18 @@ human or agent — changing this repo: every installed package goes into
   (`bin/claude-notify`), and `includeCoAuthoredBy: false`, which keeps
   `Co-Authored-By: Claude` and "Generated with Claude Code" out of commit
   messages and PR bodies.
-- **T3 Code** — `SUPER + T` (or the launcher); drives the `claude` CLI.
+- **Codex CLI** — installed by setup with OpenAI's official installer
+  (`curl -fsSL https://chatgpt.com/codex/install.sh | sh` → `~/.local/bin/codex`)
+  rather than `extra/openai-codex`, which trails upstream by a release or two.
+  Run `codex` once to log in.
+- **T3 Code** — `SUPER + T` (or the launcher); drives the `claude` and `codex`
+  CLIs.
 - `SUPER + A` toggles an *agent* scratchpad (kitty in a persistent tmux session
   `agent`) that floats over any workspace; `SUPER + `` ` `` is a second one.
 - kitty notifies when a command that ran > 20 s finishes in a window you are not
   looking at.
-- Shell aliases: `cc` (claude), `ccc` (`--continue`), `ccr` (`--resume`), `t3`.
+- Shell aliases: `cc` (claude), `ccc` (`--continue`), `ccr` (`--resume`),
+  `cx` (codex), `cxr` (`codex resume`), `t3`.
 
 ## Layout
 

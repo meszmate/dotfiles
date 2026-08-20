@@ -41,6 +41,8 @@ alias repo='onefetch'          # git repo summary
 alias cc='claude'
 alias ccc='claude --continue'
 alias ccr='claude --resume'
+alias cx='codex'
+alias cxr='codex resume'
 alias t3='t3code'
 
 # ---- tools -----------------------------------------------------

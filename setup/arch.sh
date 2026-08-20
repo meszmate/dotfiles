@@ -268,7 +268,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# AI coding tools: Claude Code + hooks for desktop notifications
+# AI coding tools: Claude Code (+ hooks), Codex CLI, T3 Code
 # ------------------------------------------------------------
 section "AI coding tools"
 if [[ $P_AI -eq 1 ]]; then
@@ -280,6 +280,22 @@ if [[ $P_AI -eq 1 ]]; then
       ok "Claude Code installed — run 'claude' once to log in"
     else
       warn "Claude Code installer failed (see $INSTLOG); install later with: curl -fsSL https://claude.ai/install.sh | bash"
+    fi
+  fi
+  # Codex CLI — the official installer, not extra/openai-codex: the repo package
+  # trails upstream (0.147 vs 0.148 at the time of writing). Installs a
+  # standalone build into ~/.codex and symlinks ~/.local/bin/codex; it only
+  # edits a shell profile when ~/.local/bin is off PATH, which .zshrc rules out
+  # (it must never rewrite ~/.zshrc — that is a symlink into this repo).
+  if command -v codex >/dev/null || [[ -x "$HOME/.local/bin/codex" ]]; then
+    ok "Codex CLI already installed ($("$HOME/.local/bin/codex" --version 2>/dev/null || echo unknown))"
+  else
+    note "Installing Codex CLI (official installer → ~/.local/bin/codex)..."
+    if CODEX_NON_INTERACTIVE=1 PATH="$HOME/.local/bin:$PATH" \
+       sh -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' >>"$INSTLOG" 2>&1; then
+      ok "Codex CLI installed — run 'codex' once to log in"
+    else
+      warn "Codex installer failed (see $INSTLOG); install later with: curl -fsSL https://chatgpt.com/codex/install.sh | sh"
     fi
   fi
   command -v t3code >/dev/null && ok "T3 Code installed (t3code — drives claude/codex/opencode CLIs)"
